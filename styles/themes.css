@@ -1,0 +1,139 @@
+/*
+ * Ink & Iris — the three schemes.
+ *
+ * This is the ONLY file in the project allowed to contain hex literals. Every
+ * other file refers to the semantic names below, which is what makes switching
+ * schemes a pure CSS concern: components never learn which scheme is active.
+ *
+ * The names describe roles, not colors. `--accent` is "the interactive color",
+ * `--due` is "this needs your attention" — so amber means due/streak/draft
+ * everywhere it appears and is never used as decoration.
+ *
+ * A scheme is not a mode. Dark is not a `prefers-color-scheme` query; Nightlab
+ * is chosen explicitly by the reader. That is why these are `[data-theme]`
+ * blocks rather than a media query.
+ */
+
+:root,
+[data-theme="daylight"] {
+  --bg: #fafafb;
+  --surface: #ffffff;
+  --surface-2: #f2f2f6;
+
+  --ink: #14161f;
+  --ink-muted: #4a4e60;
+  --ink-subtle: #767a8c;
+
+  --line: #e4e4ec;
+  --line-strong: #c7c8d4;
+
+  --accent: #4c4fe0;
+  /* Hover is a token, not an opacity trick: `brightness-110` washes out on a
+     dark ground and `opacity` fades the label along with the fill. Daylight
+     and Paper darken; Nightlab lightens, because its accent is already light. */
+  --accent-hover: #3d40c4;
+  --accent-ink: #ffffff;
+  --accent-soft: #eeeffc;
+  --accent-ring: rgb(76 79 224 / 0.35);
+
+  /* `--due` is the mark; `--due-fg` is the same meaning at text contrast.
+     Amber at #b8791f only reaches 3.7:1 on white, so text uses a darker step. */
+  --due: #b8791f;
+  --due-fg: #8a5a12;
+  --due-ink: #ffffff;
+  --due-soft: #fbf3e3;
+
+  --danger: #c0392b;
+  --danger-fg: #a52f22;
+  --danger-ink: #ffffff;
+  --danger-soft: #fbecea;
+
+  --success: #1f7a4d;
+  --success-soft: #e8f4ee;
+
+  --shadow-card: 0 1px 2px rgb(20 22 31 / 0.05),
+    0 8px 24px -16px rgb(20 22 31 / 0.16);
+  --shadow-pop: 0 4px 12px rgb(20 22 31 / 0.08),
+    0 16px 48px -12px rgb(20 22 31 / 0.2);
+
+  color-scheme: light;
+}
+
+[data-theme="nightlab"] {
+  --bg: #0c0d12;
+  --surface: #14161f;
+  --surface-2: #1c1f2b;
+
+  --ink: #eceaf4;
+  --ink-muted: #a9aabc;
+  --ink-subtle: #7b7e93;
+
+  --line: #242736;
+  --line-strong: #343850;
+
+  --accent: #8b8cff;
+  --accent-hover: #a0a1ff;
+  /* The accent is light here, so text sitting on it must be dark. */
+  --accent-ink: #0c0d12;
+  --accent-soft: #1e2036;
+  --accent-ring: rgb(139 140 255 / 0.4);
+
+  /* Amber is already light enough for text against a near-black ground. */
+  --due: #e0b054;
+  --due-fg: #e0b054;
+  --due-ink: #0c0d12;
+  --due-soft: #2a2317;
+
+  --danger: #ff7b72;
+  --danger-fg: #ff7b72;
+  --danger-ink: #0c0d12;
+  --danger-soft: #2c1a19;
+
+  --success: #5fd39a;
+  --success-soft: #16281f;
+
+  /* Elevation reads as haze on a dark ground, so hairlines do the lifting. */
+  --shadow-card: none;
+  --shadow-pop: 0 16px 48px -12px rgb(0 0 0 / 0.7);
+
+  color-scheme: dark;
+}
+
+[data-theme="paper"] {
+  --bg: #f7f4ee;
+  --surface: #fffdf9;
+  --surface-2: #f0ebe1;
+
+  --ink: #1c1a16;
+  --ink-muted: #56514a;
+  --ink-subtle: #7e786e;
+
+  --line: #e6e0d4;
+  --line-strong: #cfc6b6;
+
+  --accent: #3f45c9;
+  --accent-hover: #343aae;
+  --accent-ink: #ffffff;
+  --accent-soft: #e9e9f7;
+  --accent-ring: rgb(63 69 201 / 0.35);
+
+  --due: #a9691a;
+  --due-fg: #8a5510;
+  --due-ink: #ffffff;
+  --due-soft: #f7eddc;
+
+  --danger: #b23a2a;
+  --danger-fg: #97301f;
+  --danger-ink: #ffffff;
+  --danger-soft: #f8e9e6;
+
+  --success: #226b47;
+  --success-soft: #e7f0ea;
+
+  --shadow-card: 0 1px 2px rgb(60 50 30 / 0.06),
+    0 8px 24px -16px rgb(60 50 30 / 0.18);
+  --shadow-pop: 0 4px 12px rgb(60 50 30 / 0.1),
+    0 16px 48px -12px rgb(60 50 30 / 0.22);
+
+  color-scheme: light;
+}

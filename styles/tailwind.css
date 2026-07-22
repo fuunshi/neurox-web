@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@import "./themes.css";
+@import "./typography.css";
+@import "./base.css";
+@import "./components.css";
+
+/*
+ * A variant for the rare component that must differ per scheme — elevation and
+ * hairline weights mostly, since those are the tokens a flat palette swap
+ * cannot express. Prefer tokens; reach for this only when there is no token.
+ */
+@custom-variant nightlab (&:where([data-theme="nightlab"] *));
+
+/*
+ * `inline` is load-bearing. Without it Tailwind substitutes the literal value
+ * into each generated utility, and the runtime override in themes.css never
+ * takes effect. With it, `bg-surface` compiles to `background-color:
+ * var(--surface)`, which follows the cascade — that is the whole mechanism
+ * behind three switchable schemes.
+ *
+ * `@theme` cannot be nested inside `[data-theme="…"]`: a scoped theme block is
+ * ignored. That is why palettes are plain custom properties and only the
+ * mapping lives here.
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-due: var(--due);
+  --color-due-fg: var(--due-fg);
+  --color-due-ink: var(--due-ink);
+  --color-due-soft: var(--due-soft);
+
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-soft: var(--danger-soft);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+}

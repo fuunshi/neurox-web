@@ -1,0 +1,75 @@
+/*
+ * Two families, clearly distinct in role.
+ *
+ * Newsreader is the editorial voice — headlines, card faces, source excerpts.
+ * It carries the academic register of the subject matter without reaching for
+ * the cream/serif/terracotta palette that every study app already uses.
+ *
+ * Public Sans is the interface: labels, buttons, body, numbers. It is a
+ * deliberately plain text face, which is what an interface wants, and it is
+ * not the Inter default that reads as generated.
+ *
+ * No monospace family: a monospace face on small data labels is a template
+ * tell. Where a fixed-width face is genuinely right — file extensions — the
+ * browser default is fine and is applied locally.
+ */
+
+@theme inline {
+  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-display: var(--font-newsreader), ui-serif, Georgia, "Times New Roman",
+    serif;
+
+  /* Optical sizing keeps Newsreader from looking merely scaled-down at small
+     sizes; the display face is used down to card fronts. */
+  --font-display--font-variation-settings: "opsz" 32;
+
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.4;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.6;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.55;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.45;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.3;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 1.22;
+  --text-4xl: 2.375rem;
+  --text-4xl--line-height: 1.14;
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 1.08;
+  --text-6xl: 3.75rem;
+  --text-6xl--line-height: 1.04;
+}
+
+/*
+ * Headings are set tight and slightly negative-tracked, which is what the
+ * display face wants; body keeps generous leading because it is read in
+ * paragraphs. Applied here rather than per-component so no one has to
+ * remember.
+ */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Figures that sit in columns or compare should not shift width. */
+  time,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
