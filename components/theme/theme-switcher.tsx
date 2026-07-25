@@ -71,11 +71,11 @@ export function ThemeSwitcher({ className }: { className?: string }) {
           <span
             aria-hidden
             className="size-3.5 shrink-0 rounded-full border border-line-strong p-[2px]"
-            style={{ backgroundColor: theme.swatch.bg }}
+            style={{ backgroundColor: theme.palette.bg }}
           >
             <span
               className="block size-full rounded-full"
-              style={{ backgroundColor: theme.swatch.accent }}
+              style={{ backgroundColor: theme.palette.accent }}
             />
           </span>
           <span className="hidden sm:inline">{theme.label}</span>

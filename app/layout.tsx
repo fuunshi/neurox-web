@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Newsreader, Public_Sans } from "next/font/google";
 import { themeScript } from "@/lib/theme/script";
 import { DEFAULT_THEME } from "@/lib/theme/themes";
@@ -32,10 +32,9 @@ export const metadata: Metadata = {
     "Bring your own notes, PDFs and slides. neurox drafts flashcards from them, you review and keep the ones worth remembering.",
 };
 
-export const viewport: Viewport = {
-  // Replaced by the active scheme on the client; this is the unpainted default.
-  themeColor: "#fafafb",
-};
+// No static `themeColor` here on purpose: it would be correct in exactly one of
+// the three schemes. The pre-paint script sets `<meta name="theme-color">` from
+// the active scheme, and `setTheme` keeps it in step afterwards.
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

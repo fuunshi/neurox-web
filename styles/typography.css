@@ -66,10 +66,4 @@
   p {
     text-wrap: pretty;
   }
-
-  /* Figures that sit in columns or compare should not shift width. */
-  time,
-  .tabular {
-    font-variant-numeric: tabular-nums;
-  }
 }

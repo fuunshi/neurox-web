@@ -10,22 +10,36 @@ export const THEMES = [
     id: "daylight",
     label: "Daylight",
     hint: "Cool and bright",
-    /** Swatch values for the picker. Kept here so the picker never parses CSS. */
-    swatch: { bg: "#fafafb", accent: "#4c4fe0", ink: "#14161f" },
+    /**
+     * Must mirror the corresponding block in `styles/themes.css`.
+     *
+     * These are data because they have to stay constant regardless of which
+     * scheme is active — the picker shows a Daylight swatch while Nightlab is
+     * applied, so it cannot read the live tokens. `bg` also feeds the browser
+     * chrome colour, which is per-scheme for the same reason.
+     */
+    palette: { bg: "#fafafb", accent: "#4c4fe0", ink: "#14161f" },
   },
   {
     id: "nightlab",
     label: "Nightlab",
     hint: "Dark, for late sessions",
-    swatch: { bg: "#0c0d12", accent: "#8b8cff", ink: "#eceaf4" },
+    palette: { bg: "#0c0d12", accent: "#8b8cff", ink: "#eceaf4" },
   },
   {
     id: "paper",
     label: "Paper",
     hint: "Warm and low-glare",
-    swatch: { bg: "#f7f4ee", accent: "#3f45c9", ink: "#1c1a16" },
+    palette: { bg: "#f7f4ee", accent: "#3f45c9", ink: "#1c1a16" },
   },
 ] as const;
+
+/** The page background of a scheme, for `<meta name="theme-color">`. */
+export function themeColor(id: ThemeId): string {
+  return (
+    THEMES.find((theme) => theme.id === id)?.palette.bg ?? THEMES[0].palette.bg
+  );
+}
 
 export type ThemeId = (typeof THEMES)[number]["id"];
 
