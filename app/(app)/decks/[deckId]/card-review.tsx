@@ -169,7 +169,11 @@ export function CardReview({
                     : "cursor-pointer rounded-md px-3 py-1.5 text-sm text-ink-muted hover:text-ink"
                 }
               >
-                {value === "ALL" ? "All" : STATUS_LABEL[value]} ({count})
+                {value === "ALL" ? "All" : STATUS_LABEL[value]} ({count}
+                {/* Counts come from the cards loaded so far. While more remain
+                    unloaded, every one of them is a lower bound, and a bare
+                    number would claim to be a total. */}
+                {hasMore ? "+" : ""})
               </button>
             );
           })}

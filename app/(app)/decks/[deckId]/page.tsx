@@ -55,6 +55,13 @@ export default async function DeckPage({
           ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* Always offered, even when nothing is active yet: the study screen
+              explains that only accepted cards can be studied and links back to
+              the drafts, which is more useful than a link that appears and
+              disappears. */}
+          <Link href={`/decks/${deck.id}/study`} className={buttonStyles()}>
+            Study
+          </Link>
           <Link
             href={`/generate?deck=${deck.id}`}
             className={buttonStyles({ variant: "secondary" })}

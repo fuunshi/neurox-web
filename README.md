@@ -104,14 +104,40 @@ pnpm test        # vitest — error handling, token expiry, throttle keying
 pnpm shots <email> <password> [deckId]   # signs in and screenshots the app to /tmp/shots
 ```
 
+## Study modes
+
+Two presentations of the same cards, switchable from the study screen and
+remembered in a cookie:
+
+- **Swipe** — one card at a time. Drag it, or use the arrow keys, to move
+  between cards; tap it, or press space, to reveal the answer. Swiping moves
+  rather than rating: rating would be a review action, and nothing can record
+  one yet.
+- **Grid** — every card at once, each flipping on its own. For scanning a deck
+  and spotting the ones you keep getting wrong.
+
+Both render `components/study/card-surface.tsx` rather than their own markup, so
+a third mode (a list, a quiz, audio) is a component plus an entry in
+`lib/study/modes.ts` — nothing else. Modes are presenters: the session owns the
+cards and the position, and a mode reports nothing back but a position.
+
+**Nothing about a session is saved.** `FlashCard` has no scheduling fields and
+the API has no review endpoint, so there is nowhere to record that a card was
+seen. The screen says so rather than implying progress that would vanish on
+reload. This is the missing piece between "can show you cards" and "can teach
+you": it needs a review endpoint, an interval and a due date on the card, and a
+review log — a migration plus three endpoints.
+
 ## Not built yet
 
-- **Study modes.** No review endpoints exist on the API — no scheduling fields,
-  no review log — so nothing can persist progress. The intent is several
-  selectable modes (swiping, a card grid, others) over a shared card surface.
-- **Automated end-to-end tests.** `scripts/shots.mjs` drives a real sign-in and
-  catches console errors, but it is a look rather than a suite. The plan is a
-  Playwright run covering register → Mailpit → verify → login → deck → upload →
-  generate → review.
+- **Persisted study progress** — see above. The seam is ready: the session
+  already knows which card is showing and when it was revealed.
+- **Automated end-to-end tests.** `scripts/shots.mjs` and
+  `scripts/shots-study.mjs` drive a real sign-in, the study gestures and a
+  pointer drag, and fail on console errors — but they are a look rather than a
+  suite. The plan is a Playwright run covering register → Mailpit → verify →
+  login → deck → upload → generate → review.
 - **Email verification and MFA are reachable but not exercised by a test.** The
   screens handle the states; nothing asserts them.
+- **Only the first 50 cards** load into review or study. `Load more` covers the
+  review screen; study does not page yet.
