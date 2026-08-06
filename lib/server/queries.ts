@@ -4,10 +4,12 @@ import type {
   Activity,
   CursorPage,
   Deck,
+  DeckStats,
   FlashCard,
   GenerationJob,
   Source,
   SourceDetail,
+  StudyPool,
   UserMetadata,
   UserProfile,
 } from "@/lib/api-types";
@@ -74,6 +76,32 @@ export const listSources = cache(
 
 export const getSource = cache(async (sourceId: string): Promise<SourceDetail> =>
   apiFetch<SourceDetail>(`/sources/${encodeURIComponent(sourceId)}`),
+);
+
+/**
+ * The cards to study now, with the deck's counts.
+ *
+ * One request rather than two: the API throttles per endpoint, and the study
+ * screen cannot render without either.
+ */
+export const getStudyPool = cache(
+  async (
+    deckId: string,
+    options: { limit?: number; include?: "due" | "all" } = {},
+  ): Promise<StudyPool> => {
+    const query = new URLSearchParams();
+    query.set("limit", String(options.limit ?? 50));
+    if (options.include) query.set("include", options.include);
+
+    return apiFetch<StudyPool>(
+      `/decks/${encodeURIComponent(deckId)}/study?${query.toString()}`,
+    );
+  },
+);
+
+export const getDeckStats = cache(
+  async (deckId: string): Promise<DeckStats> =>
+    apiFetch<DeckStats>(`/decks/${encodeURIComponent(deckId)}/stats`),
 );
 
 /**

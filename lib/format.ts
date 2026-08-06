@@ -85,6 +85,37 @@ export const ACCEPTED_EXTENSIONS = [
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_PASTED_CHARS = 500_000;
 
+/**
+ * How long until a card comes back, as a reader would say it.
+ *
+ * Deliberately coarse above a month: "in 3 months" is useful, "in 94 days" is
+ * false precision about a date the scheduler will move anyway.
+ */
+export function formatInterval(days: number): string {
+  if (days <= 0) return "later today";
+  if (days === 1) return "tomorrow";
+  if (days < 7) return `in ${days} days`;
+  if (days < 30) {
+    const weeks = Math.round(days / 7);
+    return `in ${weeks} ${weeks === 1 ? "week" : "weeks"}`;
+  }
+  if (days < 365) {
+    const months = Math.round(days / 30);
+    return `in ${months} ${months === 1 ? "month" : "months"}`;
+  }
+  const years = Math.round(days / 365);
+  return `in ${years} ${years === 1 ? "year" : "years"}`;
+}
+
+/** The order the grades appear in, and what each means. Kept beside the
+ *  formatter so the buttons and any copy about them cannot drift apart. */
+export const REVIEW_GRADES = [
+  { rating: "AGAIN", label: "Again", key: "1", hint: "Blanked or wrong" },
+  { rating: "HARD", label: "Hard", key: "2", hint: "Recalled, with effort" },
+  { rating: "GOOD", label: "Good", key: "3", hint: "Recalled" },
+  { rating: "EASY", label: "Easy", key: "4", hint: "Immediate" },
+] as const;
+
 /** What the API recorded for a source, as words a reader recognises. */
 export function sourceStatusLabel(status: string): string {
   switch (status) {

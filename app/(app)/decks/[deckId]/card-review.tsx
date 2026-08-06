@@ -309,6 +309,16 @@ function CardRow({
             <p className="text-sm text-ink-subtle">Hint: {card.hint}</p>
           ) : null}
 
+          {/* Lapses are worth surfacing here rather than on the study screen:
+              a card forgotten three times is usually a card that needs
+              rewriting, and this is the screen where rewriting happens. */}
+          {card.lapses >= 2 ? (
+            <p className="text-sm text-due-fg">
+              Forgotten {card.lapses} times — the wording may be the problem
+              rather than your memory.
+            </p>
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-2">
             {card.status === "DRAFT" ? (
               <Button

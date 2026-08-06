@@ -2,64 +2,64 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { FlashCard } from "@/lib/api-types";
+import type { FlashCard, ReviewRating } from "@/lib/api-types";
+import { REVIEW_GRADES } from "@/lib/format";
+import { cn } from "@/lib/utils/cn";
 import { CardSurface } from "./card-surface";
 
 /** How far a drag must travel before it counts as a swipe. Low enough to feel
- *  responsive, high enough that a shaky tap does not skip a card. */
+ *  responsive, high enough that a shaky tap does not grade a card. */
 const SWIPE_THRESHOLD_PX = 70;
 
 /** Movement beyond this is a drag, not a tap, so the release must not flip. */
 const TAP_SLOP_PX = 8;
 
 export interface SwipeModeProps {
-  cards: FlashCard[];
-  index: number;
-  onIndexChange: (index: number) => void;
-  flipped: boolean;
-  onFlippedChange: (flipped: boolean) => void;
+  card: FlashCard | undefined;
+  revealed: boolean;
+  onReveal: () => void;
+  onGrade: (rating: ReviewRating) => void;
+  onSkip: () => void;
+  busy: boolean;
+  done: number;
+  total: number;
 }
 
 /**
- * One card at a time.
+ * One card at a time: reveal, then grade.
  *
- * Swiping moves between cards and a tap reveals the answer. Swiping deliberately
- * does **not** mean "I knew it" / "I didn't": that is a review action, and
- * nothing can record one — the API has no review endpoint and no scheduling
- * fields, so a gesture that meant that would be a lie about what was stored.
+ * A card cannot be graded before its answer is showing — grading something you
+ * have not checked is guessing at your own memory, and the schedule would learn
+ * from noise.
  *
- * The gesture is never the only way to do anything. Arrows and explicit buttons
- * do the same work, which is what makes this usable with a keyboard, on a
- * desktop, and with a screen reader.
+ * Dragging right means Good and left means Again: the two grades that cover
+ * almost every review get the gesture, and the two rarer ones stay as buttons.
+ * Every one of those routes has a keyboard equivalent, so the gesture is a
+ * convenience rather than the only way through.
  */
 export function SwipeMode({
-  cards,
-  index,
-  onIndexChange,
-  flipped,
-  onFlippedChange,
+  card,
+  revealed,
+  onReveal,
+  onGrade,
+  onSkip,
+  busy,
+  done,
+  total,
 }: SwipeModeProps) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
 
   const startX = useRef(0);
   const moved = useRef(0);
-  const card = cards[index];
 
-  function go(delta: number) {
-    const next = index + delta;
-    if (next < 0 || next >= cards.length) return;
+  if (!card) return null;
 
-    onIndexChange(next);
-    // A new card always starts on its question. Carrying the flip over would
-    // show the answer before the reader has tried to recall it.
-    onFlippedChange(false);
-    setOffset(0);
-  }
+  // Grading by drag is only offered once the answer is on screen.
+  const gradable = revealed && !busy;
 
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    // Ignore secondary buttons; a right-click is not a swipe.
-    if (event.button !== 0) return;
+    if (event.button !== 0 || !gradable) return;
 
     startX.current = event.clientX;
     moved.current = 0;
@@ -72,13 +72,7 @@ export function SwipeMode({
 
     const delta = event.clientX - startX.current;
     moved.current = Math.max(moved.current, Math.abs(delta));
-
-    // Past the ends there is nowhere to go, so the card resists rather than
-    // sliding away to nothing.
-    const atStart = index === 0 && delta > 0;
-    const atEnd = index === cards.length - 1 && delta < 0;
-
-    setOffset(atStart || atEnd ? delta / 3 : delta);
+    setOffset(delta);
   }
 
   function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
@@ -87,34 +81,37 @@ export function SwipeMode({
     setDragging(false);
     event.currentTarget.releasePointerCapture?.(event.pointerId);
 
+    // The threshold is the commit point; below it the card springs back and
+    // nothing is recorded.
     if (Math.abs(offset) > SWIPE_THRESHOLD_PX) {
-      go(offset < 0 ? 1 : -1);
+      const rating: ReviewRating = offset < 0 ? "AGAIN" : "GOOD";
+      setOffset(0);
+      onGrade(rating);
       return;
     }
 
     setOffset(0);
   }
 
-  function onCardActivate() {
-    // A drag that ends on the card also fires a click. Without this, releasing a
-    // swipe would flip the card it just moved to.
+  function onCardClick() {
+    // A drag that ends on the card also fires a click; without this, releasing a
+    // swipe would immediately re-reveal the card it just graded.
     if (moved.current > TAP_SLOP_PX) {
       moved.current = 0;
       return;
     }
-    onFlippedChange(!flipped);
+    onReveal();
   }
 
-  if (!card) return null;
-
-  const progress = cards.length > 0 ? ((index + 1) / cards.length) * 100 : 0;
+  const progress = total > 0 ? (done / total) * 100 : 0;
+  const committing = dragging && Math.abs(offset) > SWIPE_THRESHOLD_PX;
 
   return (
     <div className="flex flex-col gap-5">
       <div
-        // The drag surface. `touch-action: pan-y` leaves vertical scrolling to
-        // the browser while claiming horizontal drags for the card.
-        className="relative touch-pan-y select-none"
+        // `touch-action: pan-y` leaves vertical scrolling to the browser while
+        // claiming horizontal drags for the card.
+        className={cn("relative touch-pan-y select-none", !gradable && "cursor-default")}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -122,31 +119,36 @@ export function SwipeMode({
       >
         <button
           type="button"
-          onClick={onCardActivate}
-          aria-label={
-            flipped ? "Hide the answer" : "Show the answer"
-          }
-          style={{
-            transform: `translateX(${offset}px)`,
-            // No transition while dragging: the card should track the finger
+          onClick={onCardClick}
+          aria-label={revealed ? "Hide the answer" : "Show the answer"}
+          style={{ transform: `translateX(${offset}px)` }}
+          className={cn(
+            "flex min-h-[18rem] w-full flex-col rounded-lg border bg-surface p-6 text-left shadow-card sm:min-h-[22rem] sm:p-10",
+            committing
+              ? offset < 0
+                ? "cursor-grabbing border-danger/60"
+                : "cursor-grabbing border-accent"
+              : "cursor-pointer border-line",
+            // No transition while dragging: the card should track the pointer
             // exactly. The global reduced-motion rule flattens the snap-back.
-          }}
-          className={`flex min-h-[18rem] w-full cursor-pointer flex-col rounded-lg border border-line bg-surface p-6 text-left shadow-card sm:min-h-[22rem] sm:p-10 ${
-            dragging ? "" : "transition-transform duration-200"
-          }`}
+            dragging ? "" : "transition-transform duration-200",
+          )}
         >
-          <CardSurface card={card} side={flipped ? "back" : "front"} />
+          <CardSurface card={card} side={revealed ? "back" : "front"} />
         </button>
 
-        {/* Where the swipe would land. Shown only mid-drag, so it never becomes
-            permanent furniture. */}
-        {dragging && Math.abs(offset) > SWIPE_THRESHOLD_PX ? (
+        {/* Where the swipe would land, shown only mid-drag past the threshold. */}
+        {committing ? (
           <span
             aria-hidden
-            className="pointer-events-none absolute top-1/2 -translate-y-1/2 rounded-md border border-line bg-surface px-2 py-1 text-sm text-ink-muted"
-            style={{ [offset > 0 ? "left" : "right"]: "0.75rem" }}
+            className={cn(
+              "pointer-events-none absolute top-1/2 -translate-y-1/2 rounded-md border px-2.5 py-1 text-sm",
+              offset < 0
+                ? "left-3 border-danger/40 bg-danger-soft text-danger-fg"
+                : "right-3 border-accent/40 bg-accent-soft text-accent",
+            )}
           >
-            {offset > 0 ? "Previous" : "Next"}
+            {offset < 0 ? "Again" : "Good"}
           </span>
         ) : null}
       </div>
@@ -155,51 +157,77 @@ export function SwipeMode({
         <div
           className="h-1 w-full overflow-hidden rounded-full bg-surface-2"
           role="progressbar"
-          aria-valuemin={1}
-          aria-valuemax={cards.length}
-          aria-valuenow={index + 1}
-          aria-label="Cards seen"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={done}
+          aria-label="Cards graded"
         >
           <div
-            className="h-full rounded-full bg-accent"
+            className="h-full rounded-full bg-accent transition-[width] duration-300"
             style={{ width: `${progress}%` }}
           />
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-ink-subtle tabular-nums">
-            {index + 1} of {cards.length}
-          </p>
+        {revealed ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              {REVIEW_GRADES.map((grade) => (
+                <Button
+                  key={grade.rating}
+                  size="sm"
+                  variant={grade.rating === "GOOD" ? "primary" : "secondary"}
+                  disabled={busy}
+                  onClick={() => onGrade(grade.rating)}
+                  title={grade.hint}
+                >
+                  {grade.label}
+                  <span
+                    aria-hidden
+                    className="ml-0.5 text-xs text-ink-subtle"
+                  >
+                    {grade.key}
+                  </span>
+                </Button>
+              ))}
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => go(-1)}
-              disabled={index === 0}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onFlippedChange(!flipped)}
-            >
-              {flipped ? "Hide answer" : "Show answer"}
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => go(1)}
-              disabled={index >= cards.length - 1}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onSkip}
+                disabled={busy}
+                className="ml-auto"
+              >
+                Skip
+              </Button>
+            </div>
 
-        <p className="text-sm text-ink-subtle">
-          Drag the card, or use the arrow keys. Space reveals the answer.
-        </p>
+            <p className="text-sm text-ink-subtle">
+              Swipe left for Again, right for Good. Keys 1–4 grade; space hides
+              the answer.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={onReveal}>
+                Show answer
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onSkip}
+                className="ml-auto"
+              >
+                Skip
+              </Button>
+            </div>
+
+            <p className="text-sm text-ink-subtle">
+              {done} of {total} graded. Reveal the answer to grade this card —
+              space does it too.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

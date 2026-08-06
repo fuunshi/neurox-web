@@ -1,9 +1,9 @@
 /**
- * Drives the study modes the way a reader would and captures them.
+ * Drives a study session the way a reader would, then checks the result
+ * survived a reload.
  *
- * Exercises the interactions, not just the render: flipping, arrow-keying,
- * swiping with a real pointer drag, and switching modes. A mode that renders but
- * cannot be operated is exactly the failure this is looking for.
+ * The reload is the important part: it is the difference between a session that
+ * looked like it recorded something and a session that did.
  *
  * Usage: node scripts/shots-study.mjs <email> <password> <deckId>
  */
@@ -31,86 +31,114 @@ const problems = [];
 page.on("console", (m) => m.type() === "error" && problems.push(`console: ${m.text()}`));
 page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 
-// --- sign in -----------------------------------------------------------------
 await page.goto(`${BASE}/auth/login`, { waitUntil: "networkidle" });
 await page.fill('input[name="email"]', email);
 await page.fill('input[name="password"]', password);
 await page.click('button[type="submit"]');
 await page.waitForURL(/\/decks/, { timeout: 20_000 });
 
-const url = `${BASE}/decks/${deckId}/study`;
-await page.goto(url, { waitUntil: "networkidle" });
+const studyUrl = `${BASE}/decks/${deckId}/study`;
 
-const progress = () => page.locator('[role="progressbar"]').getAttribute("aria-valuenow");
+/** How many cards the session says are left. */
+const progress = async () => {
+  const bar = page.locator('[role="progressbar"]');
+  if ((await bar.count()) === 0) return null;
+  return {
+    done: Number(await bar.getAttribute("aria-valuenow")),
+    total: Number(await bar.getAttribute("aria-valuemax")),
+  };
+};
 
-console.log("--- swipe mode ---");
-console.log("  start at card", await progress());
-await page.screenshot({ path: `${OUT}/study-swipe-front.png`, fullPage: true });
+const poolSize = async () => {
+  await page.goto(studyUrl, { waitUntil: "networkidle" });
+  const p = await progress();
+  if (p) return p.total;
+  // No progress bar means the empty state — nothing is due.
+  return 0;
+};
 
-// Reveal the answer with the button, then check the label flipped.
-await page.getByRole("button", { name: "Show answer" }).click();
-await page.waitForTimeout(150);
-const hideVisible = await page.getByRole("button", { name: "Hide answer" }).count();
-console.log("  reveal via button:", hideVisible > 0 ? "ok" : "FAILED");
-await page.screenshot({ path: `${OUT}/study-swipe-back.png`, fullPage: true });
+console.log("--- before ---");
+const startingPool = await poolSize();
+console.log("  study pool:", startingPool);
+if (startingPool === 0) {
+  console.log("  nothing due; nothing to test. Run generation/acceptance first.");
+  await browser.close();
+  process.exit(0);
+}
 
-// Arrow key advances, and resets to the question.
-await page.keyboard.press("ArrowRight");
-await page.waitForTimeout(200);
-console.log("  after ArrowRight, card", await progress());
-const backOnFront = await page.getByRole("button", { name: "Show answer" }).count();
-console.log("  new card starts on its question:", backOnFront > 0 ? "ok" : "FAILED");
+await page.goto(studyUrl, { waitUntil: "networkidle" });
+await page.screenshot({ path: `${OUT}/study-question.png`, fullPage: true });
 
-// A real pointer drag, which is the gesture the mode is named for.
-// The card is matched by its exact label: "Show the answer" (the card) rather
-// than "Show answer" (the control below it), and rather than a bare
-// `main button`, which would match the mode switcher first.
-const card = page.getByRole("button", { name: "Show the answer", exact: true });
-const box = await card.boundingBox();
-if (!box) throw new Error("card not found for the drag test");
-const y = box.y + box.height / 2;
-await page.mouse.move(box.x + box.width - 60, y);
-await page.mouse.down();
-await page.mouse.move(box.x + 120, y, { steps: 12 });
-await page.mouse.up();
-await page.waitForTimeout(300);
-console.log("  after a leftward drag, card", await progress());
+// --- reveal, then grade ------------------------------------------------------
+console.log("--- grading ---");
 
-// Space flips when nothing focusable holds focus.
-await page.locator("body").click({ position: { x: 5, y: 5 } });
+// Grading is refused before the answer is visible.
+const beforeReveal = await page.getByRole("button", { name: "Good" }).count();
+console.log("  grade buttons before revealing:", beforeReveal, beforeReveal === 0 ? "(ok)" : "(FAILED)");
+
 await page.keyboard.press(" ");
 await page.waitForTimeout(150);
-const spaceFlipped = await page.getByRole("button", { name: "Hide answer" }).count();
-console.log("  space reveals the answer:", spaceFlipped > 0 ? "ok" : "FAILED");
+const afterReveal = await page.getByRole("button", { name: /^Good/ }).count();
+console.log("  space revealed the answer:", afterReveal > 0 ? "ok" : "FAILED");
+await page.screenshot({ path: `${OUT}/study-answer.png`, fullPage: true });
 
-// --- grid mode ---------------------------------------------------------------
-console.log("--- grid mode ---");
-await page.getByRole("radio", { name: "Grid" }).click();
-await page.waitForTimeout(300);
-const tiles = await page.locator("main ul li button").count();
-console.log("  tiles rendered:", tiles);
-await page.screenshot({ path: `${OUT}/study-grid.png`, fullPage: true });
+// Grade one AGAIN by keyboard: it should stay in the session.
+const before = await progress();
+await page.keyboard.press("1");
+await page.waitForTimeout(900);
+const afterAgain = await progress();
+const banner = await page.locator('[aria-live="polite"]').first().textContent();
+console.log(`  graded AGAIN: ${JSON.stringify(before)} → ${JSON.stringify(afterAgain)}`);
+console.log("  banner:", JSON.stringify((banner ?? "").trim().slice(0, 60)));
+console.log(
+  "  card stayed in the session:",
+  afterAgain && before && afterAgain.total === before.total && afterAgain.done === before.done
+    ? "ok"
+    : "FAILED",
+);
 
-await page.getByRole("button", { name: "Reveal all" }).click();
-await page.waitForTimeout(200);
-const expanded = await page.locator('main ul li button[aria-expanded="true"]').count();
-console.log("  after Reveal all, revealed:", expanded);
-await page.screenshot({ path: `${OUT}/study-grid-revealed.png`, fullPage: true });
+// Grade the rest GOOD until the session ends.
+let guard = 0;
+while (guard < 40) {
+  guard += 1;
+  const p = await progress();
+  if (!p) break; // summary screen: no progress bar
 
-// The choice should survive a reload, the way the colour scheme does.
-await page.reload({ waitUntil: "networkidle" });
-const stillGrid = await page.getByRole("radio", { name: "Grid" }).getAttribute("aria-checked");
-console.log("  mode persisted across reload:", stillGrid === "true" ? "ok" : `FAILED (${stillGrid})`);
+  const revealButton = page.getByRole("button", { name: "Show answer" });
+  if (await revealButton.count()) {
+    await revealButton.click();
+    await page.waitForTimeout(120);
+  }
+
+  const good = page.getByRole("button", { name: /^Good/ });
+  if ((await good.count()) === 0) break;
+  await good.click();
+  await page.waitForTimeout(700);
+}
+
+const finished = await page.locator("h1", { hasText: "Session finished" }).count();
+console.log("  session summary shown:", finished > 0 ? "ok" : "FAILED");
+await page.screenshot({ path: `${OUT}/study-summary.png`, fullPage: true });
+
+// --- did it persist? ---------------------------------------------------------
+console.log("--- persistence ---");
+const afterPool = await poolSize();
+console.log(`  pool before: ${startingPool} → after: ${afterPool}`);
+console.log(
+  "  graded cards no longer due:",
+  afterPool < startingPool ? "ok" : "FAILED (nothing was recorded)",
+);
+
+// The deck screen should agree with the study screen.
+await page.goto(`${BASE}/decks/${deckId}`, { waitUntil: "networkidle" });
+const summaryLine = await page.locator("p", { hasText: /active card/ }).first().textContent();
+console.log("  deck header:", JSON.stringify((summaryLine ?? "").trim().slice(0, 80)));
+await page.screenshot({ path: `${OUT}/deck-after-study.png`, fullPage: true });
 
 // --- reduced motion ----------------------------------------------------------
-// The gesture is direct manipulation, not decoration, so it must keep working
-// when animations are switched off — reduced motion flattens the snap-back, it
-// does not disable the drag.
+// Grading is not an animation; reduced motion must not take it away.
 console.log("--- reduced motion ---");
-const reduced = await browser.newContext({
-  viewport: { width: 1280, height: 950 },
-  reducedMotion: "reduce",
-});
+const reduced = await browser.newContext({ reducedMotion: "reduce" });
 const reducedPage = await reduced.newPage();
 reducedPage.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 
@@ -119,29 +147,27 @@ await reducedPage.fill('input[name="email"]', email);
 await reducedPage.fill('input[name="password"]', password);
 await reducedPage.click('button[type="submit"]');
 await reducedPage.waitForURL(/\/decks/, { timeout: 20_000 });
-await reducedPage.goto(url, { waitUntil: "networkidle" });
+await reducedPage.goto(studyUrl, { waitUntil: "networkidle" });
 
-const reducedProgress = () =>
-  reducedPage.locator('[role="progressbar"]').getAttribute("aria-valuenow");
-
-const reducedCard = reducedPage.getByRole("button", {
-  name: "Show the answer",
-  exact: true,
-});
-const reducedBox = await reducedCard.boundingBox();
-if (!reducedBox) throw new Error("card not found under reduced motion");
-
-const ry = reducedBox.y + reducedBox.height / 2;
-await reducedPage.mouse.move(reducedBox.x + reducedBox.width - 60, ry);
-await reducedPage.mouse.down();
-await reducedPage.mouse.move(reducedBox.x + 120, ry, { steps: 12 });
-await reducedPage.mouse.up();
-await reducedPage.waitForTimeout(250);
-console.log("  drag under reduced motion, card", await reducedProgress());
-
-await reducedPage.keyboard.press("ArrowRight");
-await reducedPage.waitForTimeout(150);
-console.log("  ArrowRight under reduced motion, card", await reducedProgress());
+const reducedBar = reducedPage.locator('[role="progressbar"]');
+if ((await reducedBar.count()) === 0) {
+  console.log("  nothing due under reduced motion either (consistent)");
+} else {
+  const reveal = reducedPage.getByRole("button", { name: "Show answer" });
+  if (await reveal.count()) await reveal.click();
+  await reducedPage.waitForTimeout(150);
+  const good = reducedPage.getByRole("button", { name: /^Good/ });
+  if (await good.count()) {
+    const beforeReduced = await reducedBar.getAttribute("aria-valuenow");
+    await good.click();
+    await reducedPage.waitForTimeout(800);
+    const bar2 = reducedPage.locator('[role="progressbar"]');
+    const afterReduced = (await bar2.count())
+      ? await bar2.getAttribute("aria-valuenow")
+      : "finished";
+    console.log(`  graded under reduced motion: ${beforeReduced} → ${afterReduced}`);
+  }
+}
 
 await browser.close();
 

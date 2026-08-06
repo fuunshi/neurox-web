@@ -178,8 +178,58 @@ export interface FlashCard {
   status: CardStatus;
   /** Null for hand-written cards; set once a generation job produced it. */
   generationJobId: string | null;
+
+  // Scheduling. `dueAt` null means never reviewed, so due now.
+  dueAt: string | null;
+  /** The gap between reviews this card has earned, in days. 0 until first
+   *  success, and 0 again while a forgotten card is in a relearn step. */
+  intervalDays: number;
+  /** Consecutive successful reviews. */
+  repetitions: number;
+  /** How often this card has been forgotten — a hint that the card itself needs
+   *  rewriting, not more reviewing. */
+  lapses: number;
+  lastReviewedAt: string | null;
+
   createdAt: string;
   updatedAt: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Study                                                                       */
+/* -------------------------------------------------------------------------- */
+
+export type ReviewRating = "AGAIN" | "HARD" | "GOOD" | "EASY";
+
+export interface DeckStats {
+  total: number;
+  active: number;
+  draft: number;
+  archived: number;
+  /** Active cards in play, including ones never reviewed and ones being
+   *  relearned. This is the number the study screen offers. */
+  due: number;
+  newCards: number;
+  learned: number;
+  learning: number;
+  reviewedInLastDay: number;
+}
+
+export interface StudyPool {
+  data: FlashCard[];
+  pagination: CursorPagination;
+  stats: DeckStats;
+}
+
+export interface ReviewResult {
+  cardId: string;
+  rating: ReviewRating;
+  scheduling: {
+    intervalDays: number;
+    dueAt: string;
+    repetitions: number;
+    lapses: number;
+  };
 }
 
 /* -------------------------------------------------------------------------- */

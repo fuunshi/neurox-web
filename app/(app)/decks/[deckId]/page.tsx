@@ -1,9 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buttonStyles } from "@/components/ui/button";
-import type { CursorPage, Deck, FlashCard, GenerationJob } from "@/lib/api-types";
+import type {
+  CursorPage,
+  Deck,
+  DeckStats,
+  FlashCard,
+  GenerationJob,
+} from "@/lib/api-types";
 import { ApiError } from "@/lib/errors";
-import { getDeck, listCards, listGenerationJobs } from "@/lib/server/queries";
+import { formatCount } from "@/lib/format";
+import {
+  getDeck,
+  getDeckStats,
+  listCards,
+  listGenerationJobs,
+} from "@/lib/server/queries";
 import { CardReview } from "./card-review";
 
 /**
@@ -18,15 +30,17 @@ async function loadDeck(deckId: string): Promise<{
   deck: Deck;
   cards: CursorPage<FlashCard>;
   jobs: CursorPage<GenerationJob>;
+  stats: DeckStats;
 }> {
   try {
-    const [deck, cards, jobs] = await Promise.all([
+    const [deck, cards, jobs, stats] = await Promise.all([
       getDeck(deckId),
       listCards(deckId, { limit: 50 }),
       listGenerationJobs({ deckId, limit: 3 }),
+      getDeckStats(deckId),
     ]);
 
-    return { deck, cards, jobs };
+    return { deck, cards, jobs, stats };
   } catch (error) {
     // A deck that does not exist and one belonging to someone else both answer
     // 404 from the API, so both become this page's not-found.
@@ -41,7 +55,7 @@ export default async function DeckPage({
   params: Promise<{ deckId: string }>;
 }) {
   const { deckId } = await params;
-  const { deck, cards, jobs } = await loadDeck(deckId);
+  const { deck, cards, jobs, stats } = await loadDeck(deckId);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -53,14 +67,28 @@ export default async function DeckPage({
               {deck.description}
             </p>
           ) : null}
+
+          {/* The schedule, stated as counts. "Due" is the number the study
+              screen will actually offer, so the button and the list agree. */}
+          {stats.active > 0 ? (
+            <p className="mt-2 text-sm text-ink-subtle">
+              {formatCount(stats.active, "active card")}
+              {stats.due > 0 ? ` · ${stats.due} due` : " · nothing due"}
+              {stats.newCards > 0 ? ` · ${stats.newCards} new` : ""}
+              {stats.learning > 0 ? ` · ${stats.learning} relearning` : ""}
+              {stats.reviewedInLastDay > 0
+                ? ` · ${stats.reviewedInLastDay} reviewed today`
+                : ""}
+            </p>
+          ) : null}
         </div>
+
         <div className="flex flex-wrap gap-2">
-          {/* Always offered, even when nothing is active yet: the study screen
-              explains that only accepted cards can be studied and links back to
-              the drafts, which is more useful than a link that appears and
-              disappears. */}
+          {/* Always offered, even when nothing is active or due: the study
+              screen explains which of those it is and links back, which is more
+              useful than a button that appears and disappears. */}
           <Link href={`/decks/${deck.id}/study`} className={buttonStyles()}>
-            Study
+            {stats.due > 0 ? `Study ${stats.due} due` : "Study"}
           </Link>
           <Link
             href={`/generate?deck=${deck.id}`}
