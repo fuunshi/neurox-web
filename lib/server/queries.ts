@@ -9,6 +9,7 @@ import type {
   GenerationJob,
   Source,
   SourceDetail,
+  StudyOverview,
   StudyPool,
   UserMetadata,
   UserProfile,
@@ -102,6 +103,11 @@ export const getStudyPool = cache(
 export const getDeckStats = cache(
   async (deckId: string): Promise<DeckStats> =>
     apiFetch<DeckStats>(`/decks/${encodeURIComponent(deckId)}/stats`),
+);
+
+/** Everything the stats screen shows, in one request — see the API's note. */
+export const getStudyOverview = cache(
+  async (): Promise<StudyOverview> => apiFetch<StudyOverview>("/study/overview"),
 );
 
 /**

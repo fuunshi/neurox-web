@@ -232,6 +232,35 @@ export interface ReviewResult {
   };
 }
 
+export interface ReviewDay {
+  /** `YYYY-MM-DD` in the reader's timezone. */
+  day: string;
+  reviews: number;
+  /** Reviews that were not AGAIN. */
+  correct: number;
+}
+
+export interface ForecastDay {
+  day: string;
+  due: number;
+}
+
+export interface StudyOverview {
+  totals: {
+    reviews: number;
+    activeCards: number;
+    learnedCards: number;
+    /** Null until there is something to divide by. */
+    retention: number | null;
+    dueNow: number;
+  };
+  streak: { current: number; longest: number };
+  daily: ReviewDay[];
+  forecast: ForecastDay[];
+  /** The zone every day boundary above was computed in. */
+  timezone: string;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Sources                                                                     */
 /* -------------------------------------------------------------------------- */
