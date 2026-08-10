@@ -11,7 +11,13 @@ import { Input } from "@/components/ui/input";
 import { LoadMore } from "@/components/ui/load-more";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api/client";
-import type { CardStatus, FlashCard, GenerationJob } from "@/lib/api-types";
+import type {
+  CardImprovement,
+  CardStatus,
+  FlashCard,
+  GenerationJob,
+} from "@/lib/api-types";
+import { ApiError } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
 import { useSubmit } from "@/lib/hooks/use-submit";
 
@@ -234,6 +240,10 @@ function CardRow({
     hint: card.hint ?? "",
   });
 
+  const [improving, setImproving] = useState(false);
+  const [suggestion, setSuggestion] = useState<CardImprovement | null>(null);
+  const [improveError, setImproveError] = useState<ApiError | null>(null);
+
   function commit() {
     const next: FlashCard = {
       ...card,
@@ -248,6 +258,35 @@ function CardRow({
 
     setEditing(false);
     onSave(next, card);
+  }
+
+  /**
+   * Asks for a rewrite. The suggestion is only ever a proposal — accepting it
+   * goes through the same save path as a hand edit, which is what resets the
+   * schedule, so there is one way a card changes rather than two.
+   */
+  async function requestImprovement() {
+    setImproving(true);
+    setImproveError(null);
+
+    try {
+      const result = await apiFetch<CardImprovement>(
+        `cards/${card.id}/improve`,
+        { method: "POST" },
+      );
+      setSuggestion(result);
+    } catch (thrown) {
+      setImproveError(
+        thrown instanceof ApiError
+          ? thrown
+          : new ApiError({
+              kind: "unknown",
+              messages: ["That suggestion could not be fetched."],
+            }),
+      );
+    } finally {
+      setImproving(false);
+    }
   }
 
   return (
@@ -292,6 +331,77 @@ function CardRow({
             >
               Cancel
             </Button>
+            {/* Also offered here, for any card: editing is exactly when someone
+                is already thinking about the wording. */}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || improving}
+              onClick={requestImprovement}
+            >
+              {improving ? "Thinking…" : "Suggest a rewrite"}
+            </Button>
+          </div>
+
+          {improveError ? <FormBanner error={improveError} /> : null}
+        </div>
+      ) : suggestion ? (
+        /* The proposal, shown against nothing but itself: an accept/discard
+           choice with the original behind it would make "keep the old wording"
+           the default by inertia, and the reader came here because the old
+           wording is not working. */
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-ink-muted">
+            <span className="font-medium text-ink">Suggested rewrite.</span>{" "}
+            {suggestion.reason}
+          </p>
+
+          <div className="flex flex-col gap-2 rounded-md border border-accent/40 bg-accent-soft/50 p-3">
+            <p className="font-display text-lg leading-snug">
+              {suggestion.front}
+            </p>
+            <p className="border-t border-accent/25 pt-2 text-ink-muted">
+              {suggestion.back}
+            </p>
+            {suggestion.hint ? (
+              <p className="text-sm text-ink-subtle">
+                Hint: {suggestion.hint}
+              </p>
+            ) : null}
+          </div>
+
+          <p className="text-xs text-ink-subtle">
+            From {suggestion.model}. Accepting it replaces the wording and
+            resets this card&rsquo;s schedule, because the intervals were earned
+            by recalling the old text.
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                onSave(
+                  {
+                    ...card,
+                    front: suggestion.front,
+                    back: suggestion.back,
+                    hint: suggestion.hint,
+                  },
+                  card,
+                );
+                setSuggestion(null);
+              }}
+            >
+              Use this wording
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setSuggestion(null)}
+            >
+              Keep mine
+            </Button>
           </div>
         </div>
       ) : (
@@ -312,12 +422,28 @@ function CardRow({
           {/* Lapses are worth surfacing here rather than on the study screen:
               a card forgotten three times is usually a card that needs
               rewriting, and this is the screen where rewriting happens. */}
+          {/* The rewrite suggestion is offered only where it is the obvious next
+              step — a card you keep forgetting — and from edit mode for any
+              card. On every card it would be a fifth button in a row of five,
+              which is how a useful action becomes wallpaper. */}
           {card.lapses >= 2 ? (
-            <p className="text-sm text-due-fg">
-              Forgotten {card.lapses} times — the wording may be the problem
-              rather than your memory.
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm text-due-fg">
+                Forgotten {card.lapses} times — the wording may be the problem
+                rather than your memory.
+              </p>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy || improving}
+                onClick={requestImprovement}
+              >
+                {improving ? "Thinking…" : "Suggest a rewrite"}
+              </Button>
+            </div>
           ) : null}
+
+          {improveError ? <FormBanner error={improveError} /> : null}
 
           <div className="flex flex-wrap items-center gap-2">
             {card.status === "DRAFT" ? (

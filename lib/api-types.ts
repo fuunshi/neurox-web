@@ -232,6 +232,17 @@ export interface ReviewResult {
   };
 }
 
+/** A proposed rewrite of a card that keeps being forgotten. Never applied on
+ *  its own — the reader accepts it or discards it. */
+export interface CardImprovement {
+  front: string;
+  back: string;
+  hint: string | null;
+  /** One sentence on what was wrong with the original. */
+  reason: string;
+  model: string;
+}
+
 export interface ReviewDay {
   /** `YYYY-MM-DD` in the reader's timezone. */
   day: string;
