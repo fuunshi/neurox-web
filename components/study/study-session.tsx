@@ -53,7 +53,17 @@ export function StudySession({
   const [revealed, setRevealed] = useState(false);
   const [done, setDone] = useState(0);
   const [againCount, setAgainCount] = useState(0);
-  const [last, setLast] = useState<ReviewResult | null>(null);
+  /**
+   * The last grade, with the card it was applied to.
+   *
+   * The card is kept because undo has to put it back where it was, and what
+   * "back" means depends on the grade: a passed card left the queue, a failed one
+   * moved to the end of it.
+   */
+  const [last, setLast] = useState<{
+    result: ReviewResult;
+    card: FlashCard;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -81,7 +91,7 @@ export function StudySession({
           { method: "POST", body: { rating } },
         );
 
-        setLast(result);
+        setLast({ result, card: current });
         setRevealed(false);
 
         if (rating === "AGAIN") {
@@ -107,6 +117,45 @@ export function StudySession({
     },
     [current, busy],
   );
+
+  /**
+   * Reverses the grade just made.
+   *
+   * Only ever the last one, which is what the API guarantees — so this restores
+   * the card to the front of the queue and steps the counters back. Both grades
+   * are handled the same way by removing the card wherever it landed and putting
+   * it first.
+   */
+  const undo = useCallback(async () => {
+    if (!last || busy) return;
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      await apiFetch(`cards/${last.card.id}/review/undo`, { method: "POST" });
+
+      setQueue((q) => [last.card, ...q.filter((c) => c.id !== last.card.id)]);
+
+      // A failed card never counted toward `done`, so it is not stepped back.
+      if (last.result.rating !== "AGAIN") setDone((n) => Math.max(0, n - 1));
+      else setAgainCount((n) => Math.max(0, n - 1));
+
+      setLast(null);
+      setRevealed(false);
+    } catch (thrown) {
+      setError(
+        thrown instanceof ApiError
+          ? thrown
+          : new ApiError({
+              kind: "unknown",
+              messages: ["That review could not be undone."],
+            }),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [last, busy]);
 
   /** Pushes the current card back without grading it — for a card you want to
    *  come back to rather than judge now. */
@@ -209,14 +258,24 @@ export function StudySession({
       {/* What the last grade did, so the schedule is legible rather than magic:
           "Good" quietly meaning "see you in three days" teaches nothing. */}
       {last ? (
-        <p
+        <div
           aria-live="polite"
-          className="rounded-md border border-line bg-surface-2 px-3.5 py-2 text-sm text-ink-muted"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface-2 px-3.5 py-2"
         >
-          {last.rating === "AGAIN"
-            ? "Coming back before the end of this session."
-            : `Next review ${formatInterval(last.scheduling.intervalDays)}.`}
-        </p>
+          <p className="text-sm text-ink-muted">
+            {last.result.rating === "AGAIN"
+              ? "Coming back before the end of this session."
+              : `Next review ${formatInterval(last.result.scheduling.intervalDays)}.`}
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={undo}
+            disabled={busy}
+          >
+            Undo
+          </Button>
+        </div>
       ) : null}
 
       <FormBanner error={error} />

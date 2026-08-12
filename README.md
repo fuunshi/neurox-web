@@ -57,12 +57,18 @@ Bearer header server-side.
 ```
 browser → /api/auth/*  (login, logout, step-up)   → BFF → API
         → /api/proxy/* (everything else)          → BFF → API
+        → /api/decks/:id/export  (a file, not JSON) → BFF → API
 server components / hooks → lib/server/api.ts     → API
 ```
 
 `proxy.ts` is the only place a token refresh happens. It has to be: server
 components cannot set cookies, so a refresh anywhere else could not persist the
 rotated pair — and the API rotates and single-uses refresh tokens.
+
+The export route is the one request that is neither JSON nor a session handler.
+It forwards the file rather than re-encoding it, which lets the download be a
+plain `<a href>` — no fetch, no blob, no JavaScript — so it works with the
+browser's own download handling and survives a middle-click.
 
 ## Layout
 
@@ -73,6 +79,7 @@ app/
   (app)/              signed-in shell: decks, sources, generate, activity, settings
   api/auth/*          session handlers (cookies are set here)
   api/proxy/[...path] one authenticated forwarder for client-side calls
+  api/decks/[deckId]/export   the one route that answers a file, not JSON
 components/           ui/ theme/ auth/ app/ marketing/
 lib/
   api-types.ts        hand-written DTOs
@@ -121,6 +128,16 @@ Study is **scheduled**, not just displayed. Cards are graded with four buttons
 queue rather than leaving it, and progress is `done / (done + remaining)`, so the
 bar does not shrink when a card is failed.
 
+**A grade can be taken back.** The banner under the card carries an `Undo`, which
+reverses the grade just made. The API does not run the schedule backwards — it
+restores the card from a snapshot stored *with the review* and deletes the review
+itself, because a mis-click is not a review that happened; keeping the row and
+filtering it out everywhere would mean every statistics query has to remember a
+predicate, and one omission silently corrupts the numbers. Only the newest review
+of a card can be undone, since reversing an older one would leave every review
+after it describing a schedule that no longer exists. Rows written before the
+snapshot existed are refused rather than guessed at.
+
 Both modes render `components/study/card-surface.tsx` rather than their own
 markup, so a third mode (a list, a quiz, audio) is a component plus an entry in
 `lib/study/modes.ts` — nothing else. Modes are presenters; the session owns the
@@ -141,17 +158,35 @@ Nothing is written — accepting goes through the ordinary edit endpoint, so the
 is one path that changes a card and one place its schedule resets. Needs
 `GEMINI_API_KEY`; without one it says so rather than failing obscurely.
 
+## Exporting
+
+A deck downloads from the bottom of its own page. CSV for a spreadsheet, TSV for
+Anki, which prefers tabs because card text contains commas far more often than
+tabs. Every card is included — questions, answers, hints, and where each one is
+in its schedule — and the export deliberately does not page: one that silently
+stopped at fifty cards would be worse than none, because the reader would not
+know to check.
+
+The escaping is the whole feature. Card text routinely contains the delimiter, a
+quote, and newlines, and a `join(",")` produces a file that looks fine until it
+is opened, at which point the columns have shifted and the rows no longer line up
+with the cards — silent corruption of exactly the data someone exports because
+they care about it. Fields are quoted per RFC 4180, and the API's tests parse the
+output back rather than comparing it against strings the same code produced.
+
 ## Not built yet
 
 - **Automated end-to-end tests.** `scripts/shots*.mjs` drive a real sign-in, the
-  study gestures, a pointer drag and the stats page, and fail on console errors —
-  but they are a look rather than a suite. The plan is a Playwright run covering
-  register → Mailpit → verify → login → deck → upload → generate → review.
+  study gestures, a pointer drag, the stats page, a download and an undo, and
+  fail on console errors — but they are a look rather than a suite. The plan is a
+  Playwright run covering register → Mailpit → verify → login → deck → upload →
+  generate → review.
 - **Email verification and MFA are reachable but not exercised by a test.** The
   screens handle the states; nothing asserts them.
 - **Only the first 50 cards** load into review or study. `Load more` covers the
   review screen; study does not page yet.
-- **Undo a review.** A mis-click on `Again` currently cannot be taken back
-  without editing the schedule by hand.
-- **Import.** Decks can be studied but not brought in — no CSV or Anki import,
-  and no export either.
+- **Undo is unreachable on the last card of a session.** Grading the final card
+  finishes the session and swaps in the summary, which has no `Undo` on it — so
+  the one grade you cannot take back is the one that ended the session.
+- **Import.** Decks can be exported as CSV or TSV, but not brought in — there is
+  no CSV or Anki import.
