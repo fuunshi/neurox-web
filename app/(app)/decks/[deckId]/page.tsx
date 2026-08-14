@@ -108,6 +108,33 @@ export default async function DeckPage({
         initialHasMore={cards.pagination.hasMore}
         lastJob={jobs.data[0] ?? null}
       />
+
+      {/* Placed at the end rather than in the header: exporting is something you
+          do when you are done with a deck, not while working in it, and the
+          header already carries three actions. */}
+      <section className="flex flex-col gap-2 border-t border-line pt-5">
+        <h2 className="text-sm font-medium">Take this deck elsewhere</h2>
+        <p className="max-w-prose text-sm text-ink-muted">
+          <a
+            href={`/api/decks/${deck.id}/export?format=csv`}
+            className="text-accent hover:underline"
+            download
+          >
+            Export as CSV
+          </a>{" "}
+          for a spreadsheet, or{" "}
+          <a
+            href={`/api/decks/${deck.id}/export?format=tsv`}
+            className="text-accent hover:underline"
+            download
+          >
+            as TSV
+          </a>{" "}
+          for Anki, which prefers tabs because card text often contains commas.
+          Every card is included — questions, answers, hints, and where each one
+          is in its schedule.
+        </p>
+      </section>
     </div>
   );
 }
