@@ -7,6 +7,9 @@ import type {
   DeckStats,
   FlashCard,
   GenerationJob,
+  KnowledgeGraph,
+  QuizAttempt,
+  QuizHistoryItem,
   Source,
   SourceDetail,
   StudyOverview,
@@ -108,6 +111,35 @@ export const getDeckStats = cache(
 /** Everything the stats screen shows, in one request — see the API's note. */
 export const getStudyOverview = cache(
   async (): Promise<StudyOverview> => apiFetch<StudyOverview>("/study/overview"),
+);
+
+/**
+ * The reader's material as a graph.
+ *
+ * The response carries a `placeholder` flag rather than reporting a bare shape,
+ * because part of it is synthetic and the page says so to the reader. A client
+ * that hid that would be presenting a stand-in as a finding.
+ */
+export const getKnowledgeGraph = cache(
+  async (): Promise<KnowledgeGraph> =>
+    apiFetch<KnowledgeGraph>("/graph/knowledge"),
+);
+
+/**
+ * One quiz attempt, with its questions and whatever has been answered.
+ *
+ * Not cached across requests — a quiz is a live, mutating thing, and a cached
+ * paper would show a reader their answers from before they gave them.
+ */
+export const getQuizAttempt = (attemptId: string): Promise<QuizAttempt> =>
+  apiFetch<QuizAttempt>(`/quizzes/attempts/${encodeURIComponent(attemptId)}`);
+
+/** Past attempts, newest first. */
+export const listQuizAttempts = cache(
+  async (limit = 10): Promise<CursorPage<QuizHistoryItem>> =>
+    apiFetch<CursorPage<QuizHistoryItem>>(
+      `/quizzes/attempts?${new URLSearchParams({ limit: String(limit) })}`,
+    ),
 );
 
 /**

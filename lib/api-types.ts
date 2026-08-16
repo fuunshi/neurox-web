@@ -273,6 +273,107 @@ export interface StudyOverview {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Knowledge graph                                                             */
+/* -------------------------------------------------------------------------- */
+
+export type GraphNodeType = "SOURCE" | "DECK" | "TERM";
+export type GraphEdgeType = "GENERATED_FROM" | "COVERS";
+
+export interface GraphNode {
+  id: string;
+  type: GraphNodeType;
+  label: string;
+  /** Relative importance, 0–1. Drives node size. */
+  weight: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: GraphEdgeType;
+  weight: number;
+}
+
+export interface KnowledgeGraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  /**
+   * True while the term layer is synthetic. Source and deck nodes and the
+   * edges between them are real generation provenance; the terms are not.
+   */
+  placeholder: boolean;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Quizzes                                                                     */
+/* -------------------------------------------------------------------------- */
+
+export type QuizFormat = "MULTIPLE_CHOICE" | "CLOZE" | "MATCHING";
+export type QuizAttemptStatus = "IN_PROGRESS" | "COMPLETED";
+
+export const QUIZ_FORMATS: readonly QuizFormat[] = [
+  "MULTIPLE_CHOICE",
+  "CLOZE",
+  "MATCHING",
+] as const;
+
+export interface QuizQuestion {
+  position: number;
+  cardId: string;
+  prompt: string;
+  options: string[];
+  /**
+   * Present only once this question has been answered. The API withholds the
+   * answer until then, so an in-flight quiz cannot be read as an answer key —
+   * and a finished one can be reviewed.
+   */
+  correct?: string;
+  chosen?: string | null;
+  wasCorrect?: boolean;
+}
+
+export interface QuizAttempt {
+  id: string;
+  deckId: string;
+  format: QuizFormat;
+  status: QuizAttemptStatus;
+  questionCount: number;
+  correctCount: number;
+  questions: QuizQuestion[];
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface QuizAnswerResult {
+  position: number;
+  chosen: string | null;
+  correct: string;
+  wasCorrect: boolean;
+}
+
+export interface QuizProgress {
+  attemptId: string;
+  status: QuizAttemptStatus;
+  answered: number;
+  questionCount: number;
+  correctCount: number;
+  results: QuizAnswerResult[];
+  completed: boolean;
+}
+
+export interface QuizHistoryItem {
+  id: string;
+  deckId: string;
+  deckTitle: string;
+  format: QuizFormat;
+  status: QuizAttemptStatus;
+  questionCount: number;
+  correctCount: number;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Sources                                                                     */
 /* -------------------------------------------------------------------------- */
 
