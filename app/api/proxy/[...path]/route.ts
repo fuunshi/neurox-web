@@ -32,6 +32,7 @@ const ALLOWED_ROOTS = new Set([
   "activities",
   "user",
   "generation",
+  "quizzes",
 ]);
 
 type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authFetch } from "@/lib/api/client";
+import { APP_HOME } from "@/lib/server/routes";
 import { LocalMailHint } from "@/components/auth/local-mail-hint";
 import { isUnverifiedEmail, parseLockoutUntil } from "@/lib/errors";
 import { useSubmit } from "@/lib/hooks/use-submit";
@@ -106,7 +107,9 @@ export function LoginForm({
     // `next` arrives from a query string, so only a same-site path is honoured —
     // an absolute URL here would be an open redirect.
     const target =
-      next && next.startsWith("/") && !next.startsWith("//") ? next : "/decks";
+      next && next.startsWith("/") && !next.startsWith("//")
+        ? next
+        : APP_HOME;
 
     router.replace(target);
     // Re-render server components so the new session is picked up.

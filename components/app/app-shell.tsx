@@ -7,17 +7,22 @@ import { ThemeSwitcher } from "@/components/theme/theme-switcher";
 import { Wordmark } from "@/components/marketing/wordmark";
 import { Button } from "@/components/ui/button";
 import { authFetch } from "@/lib/api/client";
+import { isSectionActive, MOBILE_NAV } from "@/lib/app-nav";
 import { cn } from "@/lib/utils/cn";
+import { Sidebar } from "./sidebar";
 
-const NAV = [
-  { href: "/decks", label: "Decks" },
-  { href: "/sources", label: "Sources" },
-  { href: "/generate", label: "Generate" },
-  { href: "/stats", label: "Progress" },
-  { href: "/activity", label: "Activity" },
-  { href: "/settings", label: "Settings" },
-] as const;
-
+/**
+ * The signed-in chrome.
+ *
+ * The top bar used to carry the section links, and it carried them as bare
+ * labels — six words with no indication of what any of them did. Those links
+ * now live in the rail (`Sidebar`) on wide screens and in the scrolling row
+ * below the header on narrow ones, which leaves the top bar for what is
+ * genuinely global: where you are, and who you are.
+ *
+ * `/home` is the one exception. It renders without the rail, because the home
+ * page's container cards *are* the navigation — see the note in `sidebar.tsx`.
+ */
 export function AppShell({
   viewer,
   children,
@@ -28,38 +33,16 @@ export function AppShell({
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const onHome = pathname === "/home";
+  const showMobileNav = !onHome;
+
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur-sm">
         <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
-          <Link href="/decks" className="rounded-md" aria-label="neurox, decks">
+          <Link href="/home" className="rounded-md" aria-label="neurox, home">
             <Wordmark showName={false} />
           </Link>
-
-          <nav aria-label="Sections" className="hidden flex-1 sm:block">
-            <ul className="flex items-center gap-1">
-              {NAV.map((item) => {
-                const active =
-                  pathname === item.href || pathname.startsWith(`${item.href}/`);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "rounded-md px-3 py-1.5 text-sm transition-colors",
-                        active
-                          ? "bg-accent-soft text-accent"
-                          : "text-ink-muted hover:bg-surface-2 hover:text-ink",
-                      )}
-                    >
-                      {item.label}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
 
           <div className="ml-auto flex items-center gap-2">
             <ThemeSwitcher className="hidden md:inline-flex" />
@@ -73,28 +56,44 @@ export function AppShell({
         </div>
 
         {/* The nav collapses to a scrolling row on narrow screens rather than a
-            drawer: five short labels do not justify a menu. */}
-        <nav
-          aria-label="Sections"
-          className="border-t border-line px-4 py-2 sm:hidden"
-        >
-          <ul className="flex items-center gap-1 overflow-x-auto">
-            {NAV.map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  aria-current={pathname === item.href ? "page" : undefined}
-                  className="block rounded-md px-3 py-1.5 text-sm whitespace-nowrap text-ink-muted"
-                >
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
+            drawer: seven short labels do not justify a menu, and a row keeps
+            every destination one tap away. */}
+        {showMobileNav ? (
+          <nav
+            aria-label="Sections"
+            data-nav="row"
+            className="border-t border-line px-4 py-2 sm:hidden"
+          >
+            <ul className="flex items-center gap-1 overflow-x-auto">
+              {MOBILE_NAV.map((item) => {
+                const active = isSectionActive(pathname, item.href);
+
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "block rounded-md px-3 py-1.5 text-sm whitespace-nowrap transition-colors",
+                        active
+                          ? "bg-accent-soft text-accent"
+                          : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        ) : null}
       </header>
 
-      <main className="flex-1 px-4 py-8 sm:px-6">{children}</main>
+      <div className="flex flex-1 items-stretch">
+        {onHome ? null : <Sidebar />}
+        <main className="min-w-0 flex-1 px-4 py-8 sm:px-6">{children}</main>
+      </div>
     </div>
   );
 }
