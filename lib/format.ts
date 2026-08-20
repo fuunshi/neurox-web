@@ -72,6 +72,20 @@ export function formatCount(
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+/**
+ * A rate as a percentage, or an em dash when there is nothing to rate.
+ *
+ * The API sends `null` rather than `0` for "no questions asked yet", and this
+ * is the only place that decides how that reads. Rendering it as `0%` would
+ * turn "you have not tried this" into "you got everything wrong", which is the
+ * kind of thing someone acts on.
+ */
+export function formatPercent(rate: number | null): string {
+  if (rate === null || !Number.isFinite(rate)) return "—";
+
+  return `${Math.round(rate * 100)}%`;
+}
+
 /** File extensions the API accepts. Kept beside the copy that states them. */
 export const ACCEPTED_EXTENSIONS = [
   ".txt",

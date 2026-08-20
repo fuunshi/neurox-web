@@ -69,7 +69,7 @@ export const APP_SECTIONS: readonly AppSection[] = [
     href: "/stats",
     label: "Progress",
     description:
-      "Your streak, your retention and what is coming up — all read from the review log.",
+      "Your streak, when you study, how your quizzes go and what is coming up — all read from the review log.",
     icon: "progress",
   },
   {

@@ -443,6 +443,115 @@ export interface GenerationJob {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Analytics                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** One bucket of a series: how many reviews, and how many were recalled. */
+export interface ReviewSlot {
+  reviews: number;
+  /** Reviews that were not AGAIN. */
+  correct: number;
+}
+
+export interface WeekdayBucket extends ReviewSlot {
+  /** 0 is Sunday, matching the API's `dow`. */
+  weekday: number;
+}
+
+export interface HourBucket extends ReviewSlot {
+  /** 0 is midnight, in the reader's own timezone. */
+  hour: number;
+}
+
+export interface ReviewAnalytics {
+  totals: { reviews: number; days: number; cards: number };
+  /** Always seven entries, Sunday first — the API fills the quiet days. */
+  weekdays: WeekdayBucket[];
+  /** Always twenty-four entries, midnight first. */
+  hours: HourBucket[];
+  ratings: Array<{ rating: ReviewRating; count: number }>;
+  leeches: Array<{
+    cardId: string;
+    deckId: string;
+    deckTitle: string;
+    front: string;
+    count: number;
+    lapses: number;
+  }>;
+  windowDays: number;
+  timezone: string;
+}
+
+/**
+ * Nothing here divides by zero for you: an accuracy is `null` when no question
+ * has been asked, which is a different thing from answering none correctly.
+ */
+export interface QuizAnalytics {
+  totals: {
+    attempts: number;
+    questions: number;
+    correct: number;
+    accuracy: number | null;
+  };
+  /** One entry per format, including any never tried. */
+  byFormat: Array<{
+    format: QuizFormat;
+    attempts: number;
+    questions: number;
+    correct: number;
+    accuracy: number | null;
+  }>;
+  recent: Array<{
+    id: string;
+    deckId: string;
+    deckTitle: string;
+    format: QuizFormat;
+    questionCount: number;
+    correctCount: number;
+    accuracy: number | null;
+    finishedAt: string | null;
+  }>;
+  missed: Array<{
+    cardId: string;
+    deckId: string;
+    deckTitle: string;
+    front: string;
+    count: number;
+    asked: number;
+  }>;
+}
+
+export interface GenerationAnalytics {
+  totals: {
+    jobs: number;
+    succeeded: number;
+    failed: number;
+    /** Queued or running — asked for, not yet finished. */
+    inFlight: number;
+    cardsCreated: number;
+    averageSeconds: number | null;
+  };
+  byProvider: Array<{ provider: string; jobs: number; cardsCreated: number }>;
+  bySource: Array<{
+    sourceId: string;
+    title: string;
+    jobs: number;
+    cardsCreated: number;
+    failed: number;
+  }>;
+  recent: Array<{
+    id: string;
+    sourceTitle: string | null;
+    deckTitle: string | null;
+    status: GenerationJobStatus;
+    cardsCreated: number;
+    seconds: number | null;
+    error: string | null;
+    finishedAt: string | null;
+  }>;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Activity                                                                    */
 /* -------------------------------------------------------------------------- */
 

@@ -6,10 +6,13 @@ import type {
   Deck,
   DeckStats,
   FlashCard,
+  GenerationAnalytics,
   GenerationJob,
   KnowledgeGraph,
+  QuizAnalytics,
   QuizAttempt,
   QuizHistoryItem,
+  ReviewAnalytics,
   Source,
   SourceDetail,
   StudyOverview,
@@ -140,6 +143,35 @@ export const listQuizAttempts = cache(
     apiFetch<CursorPage<QuizHistoryItem>>(
       `/quizzes/attempts?${new URLSearchParams({ limit: String(limit) })}`,
     ),
+);
+
+/**
+ * When the reader studies, and what they keep forgetting.
+ *
+ * The days and hours in it are bucketed in the reader's own timezone by the
+ * API, from their profile — not by this server and not by the browser, so the
+ * same chart means the same thing wherever it is opened.
+ */
+export const getReviewAnalytics = cache(
+  async (): Promise<ReviewAnalytics> =>
+    apiFetch<ReviewAnalytics>("/analytics/reviews"),
+);
+
+/** How the reader does on quizzes, and which cards keep catching them out. */
+export const getQuizAnalytics = cache(
+  async (): Promise<QuizAnalytics> => apiFetch<QuizAnalytics>("/analytics/quizzes"),
+);
+
+/**
+ * What generation has actually produced.
+ *
+ * This one counts the machine rather than the reader, which is why it is asked
+ * for by the sources screen — a source that yields nothing is a fact about the
+ * material, and it belongs next to the material.
+ */
+export const getGenerationAnalytics = cache(
+  async (): Promise<GenerationAnalytics> =>
+    apiFetch<GenerationAnalytics>("/analytics/generation"),
 );
 
 /**

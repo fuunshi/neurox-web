@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { SourceYield } from "@/components/analytics/source-yield";
 import { FormBanner } from "@/components/auth/form-banner";
 import { Button, buttonStyles } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
@@ -13,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api/client";
-import type { Source } from "@/lib/api-types";
+import type { GenerationAnalytics, Source } from "@/lib/api-types";
 import {
   ACCEPTED_EXTENSIONS,
   formatBytes,
@@ -26,7 +27,13 @@ import {
 } from "@/lib/format";
 import { useSubmit } from "@/lib/hooks/use-submit";
 
-export function SourcesView({ initialSources }: { initialSources: Source[] }) {
+export function SourcesView({
+  initialSources,
+  analytics,
+}: {
+  initialSources: Source[];
+  analytics: GenerationAnalytics;
+}) {
   const router = useRouter();
   const [tab, setTab] = useState<"paste" | "upload">("paste");
 
@@ -105,6 +112,16 @@ export function SourcesView({ initialSources }: { initialSources: Source[] }) {
           </ul>
         )}
       </section>
+
+      <Panel>
+        <PanelHeader
+          title="What these produced"
+          description="Counts from generation, not from studying — a source that yields nothing is worth knowing about before you add three more like it."
+        />
+        <PanelBody>
+          <SourceYield analytics={analytics} />
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

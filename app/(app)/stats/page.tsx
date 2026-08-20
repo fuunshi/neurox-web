@@ -1,16 +1,32 @@
 import Link from "next/link";
+import { Leeches } from "@/components/analytics/leeches";
+import { QuizPerformance } from "@/components/analytics/quiz-performance";
+import { RatingMix } from "@/components/analytics/rating-mix";
+import { WhenYouStudy } from "@/components/analytics/when-you-study";
 import { buttonStyles } from "@/components/ui/button";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { ActivityChart } from "@/components/stats/activity-chart";
 import { ForecastChart } from "@/components/stats/forecast-chart";
 import { StatTile } from "@/components/stats/stat-tile";
-import { formatCount } from "@/lib/format";
-import { getStudyOverview } from "@/lib/server/queries";
+import { formatCount, formatPercent } from "@/lib/format";
+import {
+  getQuizAnalytics,
+  getReviewAnalytics,
+  getStudyOverview,
+} from "@/lib/server/queries";
 
 export const metadata = { title: "Progress" };
 
 export default async function StatsPage() {
-  const overview = await getStudyOverview();
+  // Three separate reads rather than one composite endpoint: the overview is
+  // about the schedule, the other two about the history, and each is cached
+  // and throttled on its own. They go out together, so the page waits once.
+  const [overview, reviews, quizzes] = await Promise.all([
+    getStudyOverview(),
+    getReviewAnalytics(),
+    getQuizAnalytics(),
+  ]);
+
   const { totals, streak, daily, forecast, timezone } = overview;
 
   const nothingYet = totals.reviews === 0;
@@ -58,11 +74,7 @@ export default async function StatsPage() {
           />
 
           <StatTile
-            value={
-              totals.retention === null
-                ? "—"
-                : `${Math.round(totals.retention * 100)}%`
-            }
+            value={formatPercent(totals.retention)}
             label="recalled"
             detail={
               totals.retention === null
@@ -85,6 +97,14 @@ export default async function StatsPage() {
         </PanelBody>
       </Panel>
 
+      {/* Worth stating plainly, and worth stating here rather than at the foot
+          of the page: it explains the "recalled" figure directly above it. */}
+      <p className="text-sm text-ink-subtle">
+        Retention counts a review as recalled unless you graded it Again. It is
+        measured over the same 30 days the chart below shows, so the figure and
+        the bars can never disagree.
+      </p>
+
       <Panel>
         <PanelHeader
           title="Review activity"
@@ -105,12 +125,36 @@ export default async function StatsPage() {
         </PanelBody>
       </Panel>
 
-      {/* Worth stating plainly, because the numbers invite the question. */}
-      <p className="text-sm text-ink-subtle">
-        Retention counts a review as recalled unless you graded it Again. It is
-        measured over the same 30 days the chart shows, so the figure and the
-        bars can never disagree.
-      </p>
+      <Panel>
+        <PanelHeader
+          title="How you study"
+          description={`The last ${reviews.windowDays} days, by weekday and hour — bucketed in ${reviews.timezone.replace(/_/g, " ")}, the timezone on your profile rather than the server's clock.`}
+        />
+        <PanelBody className="flex flex-col gap-6">
+          <WhenYouStudy analytics={reviews} />
+          <RatingMix ratings={reviews.ratings} />
+        </PanelBody>
+      </Panel>
+
+      <Panel>
+        <PanelHeader
+          title="Quizzes"
+          description="Quizzes never move your review schedule, so this is what you knew on the day — separate from the streak above."
+        />
+        <PanelBody>
+          <QuizPerformance analytics={quizzes} />
+        </PanelBody>
+      </Panel>
+
+      <Panel>
+        <PanelHeader
+          title="Cards you keep forgetting"
+          description="Failed repeatedly in review. These are the ones worth rewriting rather than repeating."
+        />
+        <PanelBody>
+          <Leeches analytics={reviews} />
+        </PanelBody>
+      </Panel>
     </div>
   );
 }
