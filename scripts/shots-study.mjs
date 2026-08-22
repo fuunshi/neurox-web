@@ -35,7 +35,7 @@ await page.goto(`${BASE}/auth/login`, { waitUntil: "networkidle" });
 await page.fill('input[name="email"]', email);
 await page.fill('input[name="password"]', password);
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/decks/, { timeout: 20_000 });
+await page.waitForURL(/\/home|\/decks/, { timeout: 20_000 });
 
 const studyUrl = `${BASE}/decks/${deckId}/study`;
 
@@ -146,7 +146,7 @@ await reducedPage.goto(`${BASE}/auth/login`, { waitUntil: "networkidle" });
 await reducedPage.fill('input[name="email"]', email);
 await reducedPage.fill('input[name="password"]', password);
 await reducedPage.click('button[type="submit"]');
-await reducedPage.waitForURL(/\/decks/, { timeout: 20_000 });
+await reducedPage.waitForURL(/\/home|\/decks/, { timeout: 20_000 });
 await reducedPage.goto(studyUrl, { waitUntil: "networkidle" });
 
 const reducedBar = reducedPage.locator('[role="progressbar"]');

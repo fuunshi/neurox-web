@@ -23,7 +23,7 @@ await page.goto(`${BASE}/auth/login`, { waitUntil: "networkidle" });
 await page.fill('input[name="email"]', email);
 await page.fill('input[name="password"]', password);
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/decks/, { timeout: 20000 });
+await page.waitForURL(/\/home|\/decks/, { timeout: 20000 });
 
 await page.goto(`${BASE}/decks/${deckId}`, { waitUntil: "networkidle" });
 
