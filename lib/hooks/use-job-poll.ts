@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api/client";
 import {
   TERMINAL_JOB_STATUSES,
   type GenerationJob,
+  type JobUpdatedMessage,
 } from "@/lib/api-types";
 import { ApiError } from "@/lib/errors";
+import {
+  onRealtimeEvent,
+  subscribeTopic,
+  unsubscribeTopic,
+} from "@/lib/realtime/client";
 
 /** Slow enough not to compete for the API's per-endpoint request budget, which
  *  this server shares across every reader. */
@@ -16,6 +22,9 @@ const INTERVAL_MS = 1500;
  *  request every 1.5s forever is worse than admitting it. */
 const MAX_ATTEMPTS = 80;
 
+/** The event the API pushes when a generation run changes state. */
+const JOB_UPDATED_EVENT = "job:updated";
+
 export interface JobPollState {
   job: GenerationJob | null;
   /** Set when polling itself failed, not when the job failed. */
@@ -24,18 +33,42 @@ export interface JobPollState {
   stalled: boolean;
 }
 
+export interface JobPollResult extends JobPollState {
+  /** Polls again after giving up — for a job that is still running server-side. */
+  restart: () => void;
+}
+
 /**
  * Follows a generation job until it reaches a terminal status.
  *
- * Polling, rather than a socket, because the job is short-lived and the result
- * is a single row — a subscription would be more machinery than the problem
- * needs. The interval is deliberately not aggressive: the API throttles per
- * endpoint and every request from this server shares one budget.
+ * ## Polling, with a socket in front of it
+ *
+ * A generation run is the longest thing a reader waits for in this product, and
+ * asking every 1.5 seconds whether it has finished was always a stand-in for
+ * not having a socket. Now there is one, so the API pushes `job:updated` and
+ * this fetches the moment it hears — the interval drops from "how you find out"
+ * to "how you recover if the socket never connects".
+ *
+ * The push deliberately does **not** carry the job itself. Its payload is the
+ * queue's view — status and a card count — while the screen also renders the
+ * provider and the deck, so the event is treated as a nudge to re-read rather
+ * than as the record. That keeps one shape of `GenerationJob` in the app, and
+ * means a push arriving mid-write cannot show a half-updated card.
+ *
+ * ## Two ways to stop
+ *
+ * The interval stops when the job reaches a terminal status, and — separately —
+ * after `MAX_ATTEMPTS`, which reports `stalled` rather than spinning forever.
+ * The socket does not extend that budget: a run that is genuinely stuck should
+ * still give up at the same point whether or not a socket is open.
  */
 export function useJobPoll(
   jobId: string | null,
   initialJob: GenerationJob | null = null,
-): JobPollState {
+  /** The deck the job belongs to, so this client can watch that deck's topic.
+   *  Without it, notifications still arrive; only deck-scoped pushes are missed. */
+  deckId?: string | null,
+): JobPollResult {
   const [state, setState] = useState<JobPollState>({
     job: initialJob,
     error: null,
@@ -45,56 +78,113 @@ export function useJobPoll(
   // Kept in a ref so the effect does not restart on every state update — that
   // would reset the interval and hammer the endpoint.
   const attempts = useRef(0);
+  // Bumped by `restart`. It is in the effect's dependencies precisely so that
+  // asking for another round tears the old interval down and starts a new one.
+  const [round, setRound] = useState(0);
+  // Whether the interval is still wanted. A ref rather than state because the
+  // socket's nudge and the interval's own tick both consult it without wanting
+  // a re-render.
+  const watching = useRef(false);
+
+  const restart = useCallback(() => {
+    setState((current) => ({ ...current, stalled: false }));
+    setRound((n) => n + 1);
+  }, []);
+
+  /** One read of the job, and the decision about whether to keep going. */
+  const read = useCallback(async (): Promise<boolean> => {
+    if (!jobId) return false;
+
+    try {
+      const job = await apiFetch<GenerationJob>(`generation/jobs/${jobId}`);
+
+      setState({ job, error: null, stalled: false });
+
+      if (TERMINAL_JOB_STATUSES.includes(job.status)) {
+        watching.current = false;
+        return false;
+      }
+
+      return true;
+    } catch (thrown) {
+      watching.current = false;
+      setState((current) => ({
+        ...current,
+        error:
+          thrown instanceof ApiError
+            ? thrown
+            : new ApiError({
+                kind: "unknown",
+                messages: ["Could not check on that job."],
+              }),
+      }));
+      return false;
+    }
+  }, [jobId]);
 
   useEffect(() => {
     if (!jobId) return;
 
     attempts.current = 0;
-    let cancelled = false;
+    watching.current = true;
 
     // An interval in an effect, cleaned up on unmount or when the id changes.
     // This is what effects are for: synchronising with something outside React.
     const timer = setInterval(() => {
+      if (!watching.current) return;
+
       void (async () => {
         attempts.current += 1;
 
-        try {
-          const job = await apiFetch<GenerationJob>(
-            `generation/jobs/${jobId}`,
-          );
-          if (cancelled) return;
+        const keepGoing = await read();
 
-          setState({ job, error: null, stalled: false });
-
-          if (TERMINAL_JOB_STATUSES.includes(job.status)) {
-            clearInterval(timer);
-          } else if (attempts.current >= MAX_ATTEMPTS) {
-            clearInterval(timer);
-            setState((current) => ({ ...current, stalled: true }));
-          }
-        } catch (thrown) {
-          if (cancelled) return;
-
-          clearInterval(timer);
-          setState((current) => ({
-            ...current,
-            error:
-              thrown instanceof ApiError
-                ? thrown
-                : new ApiError({
-                    kind: "unknown",
-                    messages: ["Could not check on that job."],
-                  }),
-          }));
+        if (keepGoing && attempts.current >= MAX_ATTEMPTS) {
+          watching.current = false;
+          setState((current) => ({ ...current, stalled: true }));
         }
       })();
     }, INTERVAL_MS);
 
     return () => {
-      cancelled = true;
+      watching.current = false;
       clearInterval(timer);
     };
-  }, [jobId]);
+  }, [jobId, round, read]);
 
-  return state;
+  /**
+   * The socket's nudge: a push for this job means read it now.
+   *
+   * `watching` is checked so a push that arrives after the job finished — or
+   * after the reader cancelled — does not resurrect a request the interval had
+   * already stopped.
+   */
+  useEffect(() => {
+    if (!jobId) return;
+
+    return onRealtimeEvent(JOB_UPDATED_EVENT, (payload) => {
+      const message = payload as JobUpdatedMessage | null;
+      if (message?.jobId !== jobId) return;
+      if (!watching.current) return;
+
+      void read();
+    });
+  }, [jobId, read]);
+
+  /**
+   * Watch the deck, so a run started in another tab is heard here too.
+   *
+   * This is the subscription framework doing what it is for: the socket carries
+   * more than notifications, and a screen that wants a specific stream asks for
+   * it by name rather than polling for it.
+   */
+  useEffect(() => {
+    if (!deckId) return;
+
+    const topic = `deck:${deckId}`;
+    subscribeTopic(topic);
+
+    return () => unsubscribeTopic(topic);
+  }, [deckId]);
+
+  return { ...state, restart };
 }

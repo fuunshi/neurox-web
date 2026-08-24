@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { ResendVerification } from "@/components/auth/resend-verification";
 import { buttonStyles } from "@/components/ui/button";
 import { ApiError } from "@/lib/errors";
 import { upstreamJson } from "@/lib/server/upstream";
@@ -35,12 +36,8 @@ export default async function VerifyEmailPage({
     return (
       <Outcome
         title="That link is incomplete"
-        body="The address is missing its verification token — usually because the link was cut in half by an email client wrapping it across lines."
-        action={
-          <Link href="/auth/login" className={buttonStyles()}>
-            Go to sign in
-          </Link>
-        }
+        body="The address is missing its verification token — usually because the link was cut in half by an email client wrapping it across lines. Ask for a new one and it will arrive intact."
+        action={<ResendVerification />}
       />
     );
   }
@@ -91,11 +88,14 @@ function Failure({ error }: { error: unknown }) {
     return (
       <Outcome
         title="That link has been used"
-        body="Each verification link works once. If you have already confirmed this address, sign in — if not, signing in will send a fresh link."
+        body="Each verification link works once. If you have already confirmed this address, sign in. If you have not, ask for a new link."
         action={
-          <Link href="/auth/login" className={buttonStyles()}>
-            Go to sign in
-          </Link>
+          <div className="flex flex-col gap-3">
+            <ResendVerification />
+            <Link href="/auth/login" className={buttonStyles({ variant: "quiet" })}>
+              Go to sign in
+            </Link>
+          </div>
         }
       />
     );
@@ -105,11 +105,14 @@ function Failure({ error }: { error: unknown }) {
     return (
       <Outcome
         title="That link has expired"
-        body="Verification links last 15 minutes. Attempting to sign in sends a new one automatically."
+        body="Verification links last 15 minutes. Ask for a new one and it will arrive in a moment."
         action={
-          <Link href="/auth/login" className={buttonStyles()}>
-            Go to sign in
-          </Link>
+          <div className="flex flex-col gap-3">
+            <ResendVerification />
+            <Link href="/auth/login" className={buttonStyles({ variant: "quiet" })}>
+              Go to sign in
+            </Link>
+          </div>
         }
       />
     );
@@ -120,12 +123,15 @@ function Failure({ error }: { error: unknown }) {
       title="That link did not work"
       body={
         apiError?.summary ??
-        "Something went wrong confirming this address. Signing in will send a fresh link."
+        "Something went wrong confirming this address. You can ask for a new link."
       }
       action={
-        <Link href="/auth/login" className={buttonStyles()}>
-          Go to sign in
-        </Link>
+        <div className="flex flex-col gap-3">
+          <ResendVerification />
+          <Link href="/auth/login" className={buttonStyles({ variant: "quiet" })}>
+            Go to sign in
+          </Link>
+        </div>
       }
     />
   );

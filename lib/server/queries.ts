@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import type {
   Activity,
+  AuthMe,
   CursorPage,
   Deck,
   DeckStats,
@@ -17,6 +18,7 @@ import type {
   SourceDetail,
   StudyOverview,
   StudyPool,
+  TextChunk,
   UserMetadata,
   UserProfile,
 } from "@/lib/api-types";
@@ -86,6 +88,21 @@ export const getSource = cache(async (sourceId: string): Promise<SourceDetail> =
 );
 
 /**
+ * How the source will be split for generation.
+ *
+ * Computed by the API on demand rather than stored, so this is also the honest
+ * answer to "why did generation find nothing in my document?" — the chunks are
+ * literally what the generator reads, and a document with no definitions in it
+ * chunks into passages with no definitions in them.
+ *
+ * The API refuses this for anything not READY, so callers must check first.
+ */
+export const getSourceChunks = cache(
+  async (sourceId: string): Promise<TextChunk[]> =>
+    apiFetch<TextChunk[]>(`/sources/${encodeURIComponent(sourceId)}/chunks`),
+);
+
+/**
  * The cards to study now, with the deck's counts.
  *
  * One request rather than two: the API throttles per endpoint, and the study
@@ -94,11 +111,12 @@ export const getSource = cache(async (sourceId: string): Promise<SourceDetail> =
 export const getStudyPool = cache(
   async (
     deckId: string,
-    options: { limit?: number; include?: "due" | "all" } = {},
+    options: { limit?: number; include?: "due" | "all"; cursor?: string } = {},
   ): Promise<StudyPool> => {
     const query = new URLSearchParams();
     query.set("limit", String(options.limit ?? 50));
     if (options.include) query.set("include", options.include);
+    if (options.cursor) query.set("cursor", options.cursor);
 
     return apiFetch<StudyPool>(
       `/decks/${encodeURIComponent(deckId)}/study?${query.toString()}`,
@@ -213,4 +231,15 @@ export const listGenerationJobs = cache(
 
 export const getProfile = cache(async (): Promise<{ profile: UserProfile }> =>
   apiFetch<{ profile: UserProfile }>("/user/me/profile"),
+);
+
+/**
+ * The account's sign-in state, as opposed to its profile.
+ *
+ * Separate from `getProfile` because it answers a different question: whether an
+ * authenticator is enrolled. The settings screen needs that to say which state
+ * the account is in rather than always offering to set one up.
+ */
+export const getMe = cache(async (): Promise<AuthMe> =>
+  apiFetch<AuthMe>("/auth/me"),
 );

@@ -14,6 +14,10 @@ export default async function GeneratePage({
   const params = await searchParams;
   const raw = params.source;
   const preselect = Array.isArray(raw) ? raw[0] : raw;
+  // "Draft more cards" and the deck review screen both link here with a deck,
+  // so that a generation lands where the reader was already looking.
+  const rawDeck = params.deck;
+  const preselectDeck = Array.isArray(rawDeck) ? rawDeck[0] : rawDeck;
 
   // Two reads rather than three: the viewport also needs decks, and both are
   // cached per request.
@@ -78,6 +82,7 @@ export default async function GeneratePage({
           characters: source.characterCount ?? 0,
         }))}
         preselectSourceId={preselect}
+        preselectDeckId={preselectDeck}
       />
     </div>
   );

@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { SourceYield } from "@/components/analytics/source-yield";
 import { FormBanner } from "@/components/auth/form-banner";
 import { Button, buttonStyles } from "@/components/ui/button";
@@ -11,10 +10,11 @@ import { ConfirmDialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { LoadMore } from "@/components/ui/load-more";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api/client";
-import type { GenerationAnalytics, Source } from "@/lib/api-types";
+import type { CursorPage, GenerationAnalytics, Source } from "@/lib/api-types";
 import {
   ACCEPTED_EXTENSIONS,
   formatBytes,
@@ -25,17 +25,40 @@ import {
   sourceStatusLabel,
   sourceTypeLabel,
 } from "@/lib/format";
+import { useCursorList } from "@/lib/hooks/use-cursor-list";
 import { useSubmit } from "@/lib/hooks/use-submit";
 
 export function SourcesView({
   initialSources,
   analytics,
 }: {
-  initialSources: Source[];
+  initialSources: CursorPage<Source>;
   analytics: GenerationAnalytics;
 }) {
-  const router = useRouter();
   const [tab, setTab] = useState<"paste" | "upload">("paste");
+  const {
+    items: sources,
+    setItems: setSources,
+    hasMore,
+    loading: loadingMore,
+    loadMore,
+  } = useCursorList<Source>(initialSources, "sources?limit=24");
+
+  /*
+   * Adding and deleting are applied to the list in place rather than by
+   * refreshing the route. A refresh would re-render the server component with
+   * a fresh first page, while this component's state holds every page loaded so
+   * far — so the reader would silently lose the pages they had loaded.
+   *
+   * Newest first, which is the order the API returns a list in.
+   */
+  function addSource(source: Source) {
+    setSources((current) => [source, ...current]);
+  }
+
+  function removeSource(sourceId: string) {
+    setSources((current) => current.filter((item) => item.id !== sourceId));
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
@@ -82,9 +105,9 @@ export function SourcesView({
         />
         <PanelBody>
           {tab === "paste" ? (
-            <PasteForm onAdded={() => router.refresh()} />
+            <PasteForm onAdded={addSource} />
           ) : (
-            <UploadForm onAdded={() => router.refresh()} />
+            <UploadForm onAdded={addSource} />
           )}
         </PanelBody>
       </Panel>
@@ -92,24 +115,41 @@ export function SourcesView({
       <section className="flex flex-col gap-3">
         <h2 className="text-lg">
           Your material
-          {initialSources.length > 0 ? (
+          {sources.length > 0 ? (
             <span className="ml-2 font-normal text-ink-subtle">
-              {formatCount(initialSources.length, "source")}
+              {formatCount(sources.length, "source")}
+              {/* A lower bound while more remain unloaded, rather than a total
+                  the page cannot actually vouch for. */}
+              {hasMore ? "+" : ""}
             </span>
           ) : null}
         </h2>
 
-        {initialSources.length === 0 ? (
+        {sources.length === 0 ? (
           <EmptyState
             title="Nothing here yet"
             description="Paste a page of notes or upload a PDF above. You will see what was read from it before generating any cards."
           />
         ) : (
-          <ul className="flex flex-col gap-2">
-            {initialSources.map((source) => (
-              <SourceRow key={source.id} source={source} />
-            ))}
-          </ul>
+          <>
+            <ul className="flex flex-col gap-2">
+              {sources.map((source) => (
+                <SourceRow
+                  key={source.id}
+                  source={source}
+                  onRemoved={() => removeSource(source.id)}
+                />
+              ))}
+            </ul>
+
+            <LoadMore
+              shown={sources.length}
+              hasMore={hasMore}
+              loading={loadingMore}
+              onLoadMore={loadMore}
+              noun="source"
+            />
+          </>
         )}
       </section>
 
@@ -126,7 +166,7 @@ export function SourcesView({
   );
 }
 
-function PasteForm({ onAdded }: { onAdded: () => void }) {
+function PasteForm({ onAdded }: { onAdded: (source: Source) => void }) {
   const { pending, error, fieldErrors, submit, setFieldErrors } = useSubmit();
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
@@ -156,7 +196,7 @@ function PasteForm({ onAdded }: { onAdded: () => void }) {
     if (outcome.ok) {
       setTitle("");
       setText("");
-      onAdded();
+      onAdded(outcome.value);
     }
   }
 
@@ -199,7 +239,7 @@ function PasteForm({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-function UploadForm({ onAdded }: { onAdded: () => void }) {
+function UploadForm({ onAdded }: { onAdded: (source: Source) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -248,7 +288,7 @@ function UploadForm({ onAdded }: { onAdded: () => void }) {
     if (outcome.ok) {
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
-      onAdded();
+      onAdded(outcome.value);
     }
   }
 
@@ -304,8 +344,13 @@ function UploadForm({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-function SourceRow({ source }: { source: Source }) {
-  const router = useRouter();
+function SourceRow({
+  source,
+  onRemoved,
+}: {
+  source: Source;
+  onRemoved: () => void;
+}) {
   const [confirming, setConfirming] = useState(false);
   const { pending, submit } = useSubmit();
 
@@ -317,7 +362,9 @@ function SourceRow({ source }: { source: Source }) {
     );
     if (outcome.ok) {
       setConfirming(false);
-      router.refresh();
+      // The list owns its own state, so the row takes itself out of it rather
+      // than asking the route to re-render.
+      onRemoved();
     }
   }
 
@@ -342,12 +389,20 @@ function SourceRow({ source }: { source: Source }) {
             {sourceStatusLabel(source.status)}
           </Chip>
           {source.status === "READY" ? (
-            <Link
-              href={`/generate?source=${source.id}`}
-              className={buttonStyles({ variant: "secondary", size: "sm" })}
-            >
-              Generate
-            </Link>
+            <>
+              <Link
+                href={`/sources/${source.id}`}
+                className={buttonStyles({ variant: "secondary", size: "sm" })}
+              >
+                Read
+              </Link>
+              <Link
+                href={`/generate?source=${source.id}`}
+                className={buttonStyles({ variant: "secondary", size: "sm" })}
+              >
+                Generate
+              </Link>
+            </>
           ) : null}
           <Button
             variant="ghost"

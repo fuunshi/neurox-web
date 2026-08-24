@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { FormBanner } from "@/components/auth/form-banner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -18,8 +17,7 @@ import { useSubmit } from "@/lib/hooks/use-submit";
  * time, so the form does not belong permanently on the page, but neither does it
  * deserve a modal for two fields.
  */
-export function NewDeck() {
-  const router = useRouter();
+export function NewDeck({ onCreated }: { onCreated: (deck: Deck) => void }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -48,7 +46,9 @@ export function NewDeck() {
       setTitle("");
       setDescription("");
       setOpen(false);
-      router.refresh();
+      // Handed to the list rather than a route refresh: the list holds every
+      // page loaded so far, and a refresh would drop it back to the first.
+      onCreated(outcome.value);
     }
   }
 

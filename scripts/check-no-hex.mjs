@@ -10,9 +10,18 @@
  * Run: node scripts/check-no-hex.mjs
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+/**
+ * `fileURLToPath`, not `.pathname`.
+ *
+ * On Windows a `file://` URL's pathname is `/D:/Codes/…` — the leading slash
+ * before the drive letter is not a real segment, and joining it to a directory
+ * yields `D:\D:\Codes\…`, which does not exist. `fileURLToPath` is the
+ * conversion that knows about drive letters.
+ */
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 /**
  * The two files allowed to hold raw colour.
@@ -46,15 +55,21 @@ function* walk(dir) {
 const offences = [];
 
 for (const dir of SCAN) {
-  let files;
+  // Collected eagerly inside the `try`, not lazily: `walk` is a generator, so
+  // calling it does nothing and the `readdir` inside it throws during
+  // iteration — which, outside this block, no `catch` would ever see.
+  const files = [];
   try {
-    files = walk(join(ROOT, dir));
+    for (const file of walk(join(ROOT, dir))) files.push(file);
   } catch {
     continue; // Directory not created yet.
   }
 
   for (const file of files) {
-    const rel = relative(ROOT, file);
+    // Forward slashes whatever the platform: `relative` returns backslashes on
+    // Windows, so the allow-list below would never match and the two palette
+    // files would be reported as offences against the palette.
+    const rel = relative(ROOT, file).split(sep).join("/");
     if (ALLOWED.has(rel)) continue;
 
     const lines = readFileSync(file, "utf8").split("\n");

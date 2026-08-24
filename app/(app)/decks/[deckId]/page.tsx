@@ -17,6 +17,7 @@ import {
   listGenerationJobs,
 } from "@/lib/server/queries";
 import { CardReview } from "./card-review";
+import { DeckActions } from "./deck-actions";
 
 /**
  * Loads the deck, its cards and its recent jobs.
@@ -104,8 +105,7 @@ export default async function DeckPage({
 
       <CardReview
         deckId={deck.id}
-        initialCards={cards.data}
-        initialHasMore={cards.pagination.hasMore}
+        initial={cards}
         lastJob={jobs.data[0] ?? null}
       />
 
@@ -135,6 +135,8 @@ export default async function DeckPage({
           is in its schedule.
         </p>
       </section>
+
+      <DeckActions deck={deck} />
     </div>
   );
 }

@@ -4,12 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { FormBanner } from "@/components/auth/form-banner";
 import { Button, buttonStyles } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { apiFetch } from "@/lib/api/client";
 import type {
-  DeckStats,
   FlashCard,
   ReviewRating,
   ReviewResult,
+  StudyPool,
 } from "@/lib/api-types";
 import { ApiError } from "@/lib/errors";
 import { formatCount, formatInterval } from "@/lib/format";
@@ -38,18 +39,31 @@ import { SwipeMode } from "./swipe-mode";
 export function StudySession({
   deckId,
   deckTitle,
-  cards,
-  stats,
+  pool,
+  include,
   initialMode = DEFAULT_STUDY_MODE,
 }: {
   deckId: string;
   deckTitle: string;
-  cards: FlashCard[];
-  stats: DeckStats;
+  pool: StudyPool;
+  /** Which pool this is, so a continued page asks for the same one. */
+  include: "due" | "all";
   initialMode?: StudyModeId;
 }) {
+  const cards = pool.data;
+  const stats = pool.stats;
   const [mode, setMode] = useState<StudyModeId>(initialMode);
   const [queue, setQueue] = useState(cards);
+  /**
+   * Where the next page of the pool is.
+   *
+   * The API caps a page, so a deck bigger than one page would otherwise end its
+   * session early and silently — the reader would finish "everything due" while
+   * cards were still waiting. Instead the session continues into the next page
+   * when the queue runs out, and only finishes when the cursor does.
+   */
+  const [cursor, setCursor] = useState(pool.pagination.nextCursor);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [done, setDone] = useState(0);
   const [againCount, setAgainCount] = useState(0);
@@ -68,7 +82,12 @@ export function StudySession({
   const [error, setError] = useState<ApiError | null>(null);
 
   const current = queue[0];
-  const finished = queue.length === 0;
+  /**
+   * The session is over only when the queue is empty *and* there is nothing
+   * left to pull in. A cursor still in hand means another page exists, so a
+   * deck larger than one page cannot finish early without saying so.
+   */
+  const finished = queue.length === 0 && cursor === null;
   const total = done + queue.length;
   const sequential = studyMode(mode).sequential;
 
@@ -76,6 +95,45 @@ export function StudySession({
     setMode(next);
     document.cookie = `${STUDY_MODE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
   }, []);
+
+  /**
+   * Pulls the next page of the pool and appends it to the queue.
+   *
+   * Driven by the grade that drained the queue rather than by an effect on
+   * `queue.length`: this is a consequence of something the reader did, and an
+   * effect that set state on mount would render twice for nothing. The guard
+   * also means a failing API is asked once, not once per render.
+   */
+  const loadNextPage = useCallback(async () => {
+    if (!cursor || loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const query = new URLSearchParams({ limit: "50", include, cursor });
+      const page = await apiFetch<StudyPool>(
+        `decks/${deckId}/study?${query.toString()}`,
+      );
+
+      setQueue((q) => [...q, ...page.data]);
+      // An empty page alongside a cursor would mean no progress; treat it as
+      // the end rather than asking again for the same rows.
+      setCursor(page.data.length > 0 ? page.pagination.nextCursor : null);
+    } catch (thrown) {
+      setError(
+        thrown instanceof ApiError
+          ? thrown
+          : new ApiError({
+              kind: "unknown",
+              messages: ["The rest of this deck could not be loaded."],
+            }),
+      );
+      // Give up rather than retrying forever. The reader is told why, and the
+      // session ends at the card it actually reached.
+      setCursor(null);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [cursor, loadingMore, include, deckId]);
 
   /** Records a grade and advances the queue. */
   const grade = useCallback(
@@ -99,8 +157,14 @@ export function StudySession({
           setQueue((q) => [...q.slice(1), q[0]]);
           setAgainCount((n) => n + 1);
         } else {
-          setQueue((q) => q.slice(1));
+          const rest = queue.slice(1);
+          setQueue(rest);
           setDone((n) => n + 1);
+
+          // The queue is drained but the pool may not be. Without this the
+          // session would end early on any deck larger than one page, and say
+          // it was finished — the one thing a study session must not do.
+          if (rest.length === 0 && cursor) await loadNextPage();
         }
       } catch (thrown) {
         setError(
@@ -115,7 +179,7 @@ export function StudySession({
         setBusy(false);
       }
     },
-    [current, busy],
+    [current, busy, queue, cursor, loadNextPage],
   );
 
   /**
@@ -219,14 +283,37 @@ export function StudySession({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [sequential, revealed, busy, grade]);
 
+  // The queue is drained but the pool is not: another page is on its way. Shown
+  // rather than the summary, and without the session chrome, because there is
+  // no card to present yet.
+  if (queue.length === 0 && loadingMore) {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-6">
+        <Spinner className="size-5 text-accent" />
+        <p className="text-ink-muted">Bringing in the next cards…</p>
+      </div>
+    );
+  }
+
   if (finished) {
     return (
-      <SessionSummary
-        deckId={deckId}
-        deckTitle={deckTitle}
-        done={done}
-        againCount={againCount}
-      />
+      <div className="flex flex-col gap-6">
+        {/*
+          Grading the last card is what ends the session, so this banner has to
+          survive into the summary — otherwise ending the session is what makes
+          the final grade the one that cannot be taken back. Undoing here puts
+          the card back at the head of the queue, and the session resumes.
+        */}
+        <LastGradeBanner last={last} onUndo={undo} busy={busy} />
+        <FormBanner error={error} />
+
+        <SessionSummary
+          deckId={deckId}
+          deckTitle={deckTitle}
+          done={done}
+          againCount={againCount}
+        />
+      </div>
     );
   }
 
@@ -255,28 +342,7 @@ export function StudySession({
         </div>
       </div>
 
-      {/* What the last grade did, so the schedule is legible rather than magic:
-          "Good" quietly meaning "see you in three days" teaches nothing. */}
-      {last ? (
-        <div
-          aria-live="polite"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface-2 px-3.5 py-2"
-        >
-          <p className="text-sm text-ink-muted">
-            {last.result.rating === "AGAIN"
-              ? "Coming back before the end of this session."
-              : `Next review ${formatInterval(last.result.scheduling.intervalDays)}.`}
-          </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={undo}
-            disabled={busy}
-          >
-            Undo
-          </Button>
-        </div>
-      ) : null}
+      <LastGradeBanner last={last} onUndo={undo} busy={busy} />
 
       <FormBanner error={error} />
 
@@ -294,6 +360,43 @@ export function StudySession({
       ) : (
         <GridMode cards={queue} />
       )}
+    </div>
+  );
+}
+
+/**
+ * What the last grade did, and the way back out of it.
+ *
+ * Shown so the schedule is legible rather than magic: "Good" quietly meaning
+ * "see you in three days" teaches nothing. It carries the undo because a
+ * mis-click is not a review that happened, and it is rendered by both the
+ * running session and the summary — the summary included on purpose, since
+ * grading the last card is what ends the session.
+ */
+function LastGradeBanner({
+  last,
+  onUndo,
+  busy,
+}: {
+  last: { result: ReviewResult; card: FlashCard } | null;
+  onUndo: () => void;
+  busy: boolean;
+}) {
+  if (!last) return null;
+
+  return (
+    <div
+      aria-live="polite"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface-2 px-3.5 py-2"
+    >
+      <p className="text-sm text-ink-muted">
+        {last.result.rating === "AGAIN"
+          ? "Coming back before the end of this session."
+          : `Next review ${formatInterval(last.result.scheduling.intervalDays)}.`}
+      </p>
+      <Button variant="ghost" size="sm" onClick={onUndo} disabled={busy}>
+        Undo
+      </Button>
     </div>
   );
 }

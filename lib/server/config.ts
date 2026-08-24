@@ -1,9 +1,14 @@
 /**
  * Server-only configuration.
  *
- * Nothing here is `NEXT_PUBLIC_*`: the browser is never told where the API
- * lives, because it never calls it. Every request goes through this app's own
- * route handlers.
+ * Nothing here is `NEXT_PUBLIC_*`. Ordinary requests never leave this app: the
+ * browser calls these route handlers, which hold the session and attach the
+ * bearer header, so it has no reason to know the API's address.
+ *
+ * The realtime socket is the one exception, and it is why `BACKEND_BASE_URL` is
+ * handed out at all — see `/api/auth/realtime-ticket`. The address is delivered
+ * with a ticket rather than compiled into the bundle, so it stays configuration
+ * rather than a build input.
  */
 
 function required(name: string, fallback: string): string {

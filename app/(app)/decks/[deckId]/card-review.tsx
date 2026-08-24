@@ -14,12 +14,16 @@ import { apiFetch } from "@/lib/api/client";
 import type {
   CardImprovement,
   CardStatus,
+  CursorPage,
   FlashCard,
   GenerationJob,
 } from "@/lib/api-types";
 import { ApiError } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
+import { useCursorList } from "@/lib/hooks/use-cursor-list";
 import { useSubmit } from "@/lib/hooks/use-submit";
+import { ImportCards } from "./import-cards";
+import { NewCard } from "./new-card";
 
 /** Amber for drafts because a draft is something awaiting your attention — the
  *  same meaning amber carries everywhere else in the product. */
@@ -39,19 +43,21 @@ type Filter = "ALL" | CardStatus;
 
 export function CardReview({
   deckId,
-  initialCards,
-  initialHasMore,
+  initial,
   lastJob,
 }: {
   deckId: string;
-  initialCards: FlashCard[];
-  initialHasMore: boolean;
+  initial: CursorPage<FlashCard>;
   lastJob: GenerationJob | null;
 }) {
-  const [cards, setCards] = useState(initialCards);
-  const [hasMore, setHasMore] = useState(initialHasMore);
+  const {
+    items: cards,
+    setItems: setCards,
+    hasMore,
+    loading: loadingMore,
+    loadMore,
+  } = useCursorList<FlashCard>(initial, `decks/${deckId}/cards?limit=50`);
   const [filter, setFilter] = useState<Filter>("ALL");
-  const [loadingMore, setLoadingMore] = useState(false);
   const { pending, error, submit } = useSubmit();
 
   const visible = cards.filter(
@@ -92,6 +98,17 @@ export function CardReview({
     })();
   }
 
+  /** Newest first, matching the order the API returns a card list in. */
+  function addCard(card: FlashCard) {
+    setCards((current) => [card, ...current]);
+  }
+
+  /** An import arrives as one batch, so it is prepended as one. */
+  function addCards(imported: FlashCard[]) {
+    if (imported.length === 0) return;
+    setCards((current) => [...imported, ...current]);
+  }
+
   async function removeCard(card: FlashCard) {
     const snapshot = cards;
     setCards((current) => current.filter((item) => item.id !== card.id));
@@ -103,41 +120,31 @@ export function CardReview({
     if (!outcome.ok) setCards(snapshot);
   }
 
-  async function loadMore() {
-    const last = cards[cards.length - 1];
-    if (!last) return;
-
-    setLoadingMore(true);
-    try {
-      const page = await apiFetch<{
-        data: FlashCard[];
-        pagination: { hasMore: boolean };
-      }>(`decks/${deckId}/cards?limit=50&cursor=${encodeURIComponent(last.id)}`);
-
-      setCards((current) => [...current, ...page.data]);
-      setHasMore(page.pagination.hasMore);
-    } catch {
-      // Leaving the button in place is the right recovery: the reader can try
-      // again, and nothing has been lost.
-    } finally {
-      setLoadingMore(false);
-    }
-  }
-
   if (cards.length === 0) {
     return (
-      <EmptyState
-        title="No cards in this deck"
-        description="Bring a source and draft cards from it, or add one by hand. Generated cards land here as drafts for you to review."
-        action={
-          <a
-            href={`/generate?deck=${deckId}`}
-            className="inline-flex h-10 items-center rounded-md bg-accent px-4 font-medium text-accent-ink hover:bg-accent-hover"
-          >
-            Draft cards from a source
-          </a>
-        }
-      />
+      <div className="flex flex-col gap-5">
+        <EmptyState
+          title="No cards in this deck"
+          description="Bring a source and draft cards from it, or write one by hand. Either way they land here as drafts for you to review."
+          action={
+            <a
+              href={`/generate?deck=${deckId}`}
+              className="inline-flex h-10 items-center rounded-md bg-accent px-4 font-medium text-accent-ink hover:bg-accent-hover"
+            >
+              Draft cards from a source
+            </a>
+          }
+        />
+
+        <div className="flex flex-wrap gap-2">
+          <NewCard
+            deckId={deckId}
+            onCreated={addCard}
+            trigger="Write a card by hand"
+          />
+          <ImportCards deckId={deckId} onImported={addCards} />
+        </div>
+      </div>
     );
   }
 
@@ -190,6 +197,13 @@ export function CardReview({
             {formatCount(drafts, "draft")} awaiting review
           </p>
         ) : null}
+      </div>
+
+      {/* Their own line rather than in the row above: the triggers are small,
+          but the forms they open need the full width. */}
+      <div className="flex flex-wrap gap-2">
+        <NewCard deckId={deckId} onCreated={addCard} />
+        <ImportCards deckId={deckId} onImported={addCards} />
       </div>
 
       <ul className="flex flex-col gap-2">

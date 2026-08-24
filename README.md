@@ -70,21 +70,68 @@ It forwards the file rather than re-encoding it, which lets the download be a
 plain `<a href>` — no fetch, no blob, no JavaScript — so it works with the
 browser's own download handling and survives a middle-click.
 
+### The one exception: the realtime socket
+
+Everything above routes through this app. **The socket does not**, and it cannot:
+a WebSocket needs a connection held open, and a Next.js route handler is
+request-scoped — the framework's own docs say handlers "won't work because the
+connection closes on timeout, or after the response is generated".
+
+So the browser opens one WebSocket to the API directly, and two things change
+with it:
+
+- It learns the API's address. It is handed over per connection by
+  `/api/auth/realtime-ticket` rather than compiled into the bundle, so it stays
+  server configuration — but it is in the page's JavaScript while a socket is
+  open, and pretending otherwise would be wrong.
+- It holds a credential. Not the session: the BFF mints a **ticket** that is
+  typed `realtime`, carries nothing but the user id, expires in a minute, and is
+  refused by every REST route because `AuthGuard` only admits the token types a
+  route declares. The httpOnly cookie still never leaves the server.
+
+A socket that cannot be opened costs latency and nothing else. Every screen that
+uses one also works without it — the notification list loads over REST and the
+generation screen falls back to polling — which is why nothing in
+`lib/realtime` throws to its callers.
+
+## Notifications
+
+A bell in the header, and a panel behind it. What arrives there is a **template
+key and its parameters**, stored that way and rendered server-side: the database
+never holds a sentence, so rewording a message rewords the history rather than
+only the future, and a row cannot carry text of its own into the UI.
+
+The list is fetched over the ordinary route handlers and the socket only adds to
+it, so the badge is correct on a cold page load with no socket at all. Pushes
+are deduplicated by id, and the unread count is always the server's — the list
+is capped and the count is not, so inferring one from the other would drift.
+
+The socket carries more than notifications. `lib/realtime/client.ts` is one
+connection shared by every consumer, with named **topics** a screen can
+subscribe to; the generation screen uses `deck:<id>` to hear about a run the
+moment it finishes instead of asking every 1.5 seconds. Topics are authorized
+server-side per subscriber, so the same mechanism can carry another stream
+without a second connection or a second handshake.
+
 ## Layout
 
 ```
 app/
   (marketing)/        public home page; statically rendered
   (auth)/             signed-out screens, one layout over /auth/* and /reset-password
-  (app)/              signed-in shell: decks, sources, generate, activity, settings
+  (app)/              signed-in shell: home, decks, sources, generate,
+                      quizzes, stats, map, activity, settings
   api/auth/*          session handlers (cookies are set here)
   api/proxy/[...path] one authenticated forwarder for client-side calls
   api/decks/[deckId]/export   the one route that answers a file, not JSON
-components/           ui/ theme/ auth/ app/ marketing/
+components/           ui/ theme/ auth/ app/ marketing/ study/ quiz/ analytics/
 lib/
   api-types.ts        hand-written DTOs
   errors.ts           one error shape, envelope + wire serialisation
   token-expiry.ts     pure JWT-expiry maths, testable without next/headers
+  hooks/
+    use-cursor-list.ts  cursor paging for the client-side lists
+    use-job-poll.ts     follows a generation job to a terminal status
   server/             api, session, refresh, throttle, queries
 styles/
   themes.css          the three schemes — the only file holding colour literals
@@ -107,9 +154,48 @@ attention — a draft, a source that failed, a locked account.
 ```bash
 pnpm typecheck   # next typegen && tsc --noEmit
 pnpm lint        # eslint && the colour-literal guard
-pnpm test        # vitest — error handling, token expiry, throttle keying
+pnpm test        # vitest — pure functions, the cursor-paging hook, the study session
 pnpm shots <email> <password> [deckId]   # signs in and screenshots the app to /tmp/shots
 ```
+
+## Decks, cards and sources
+
+A deck is created from the decks screen and renamed or deleted from the bottom of
+its own page — below the export, because both are things you do to a deck once
+you are finished with it. Deleting is confirmed, and takes the deck's cards and
+their review history with it.
+
+Cards arrive three ways: drafted from a source, written by hand, or imported. All
+three land as **drafts**, so nothing reaches the study queue without being looked
+at once. Amber marks a draft, as it marks anything else needing attention.
+
+A source keeps the text that was read out of it. Opening one from the sources
+list shows that text in full, and the chunks the generator actually reads — which
+is the honest answer to "why did generation find nothing in my PDF?".
+
+Cards and decks page rather than stopping at a round number, and each list says
+how many it is showing. A count that is a lower bound says so with a `+`.
+
+## Signing in
+
+Settings carries the password link and the state of two-factor authentication.
+Enrolling an authenticator happens on its own screen, because it needs a QR code
+and a confirmation step; turning it **off** is inline, because it is one field and
+one decision, and sending someone to a screen to remove a security measure makes
+removing it feel like the considered path. It asks for a current code either way,
+so a borrowed session cannot quietly drop the second factor. Disabling clears the
+secret, so re-enrolling issues a fresh one.
+
+The bottom of the page deletes the account. It is soft: the account stops being
+served, every device is signed out, and it can be restored for a short while
+afterwards from the recovery screen with the email and password. It asks for the
+password despite the reader already being signed in, because unlike changing a
+password this is not undone by signing in again — it starts a clock.
+
+A verification link that expired or was cut in half by a mail client no longer
+leaves the reader stuck: the screen that reports the problem offers to send a new
+one. Previously the only way to trigger a resend was to attempt a sign-in that
+would be refused for being unverified.
 
 ## Studying
 
@@ -127,6 +213,13 @@ Study is **scheduled**, not just displayed. Cards are graded with four buttons
 `Again` returns the card **within the session** — it moves to the back of the
 queue rather than leaving it, and progress is `done / (done + remaining)`, so the
 bar does not shrink when a card is failed.
+
+**A session continues across pages.** The API serves the pool a page at a time,
+so when the queue empties and another page exists the session pulls it in and
+carries on, rather than stopping at fifty cards and calling itself finished. The
+summary appears only once the cursor is exhausted. If that next page cannot be
+fetched the session ends where it got to and says so, rather than retrying
+against a failing API for ever.
 
 **A grade can be taken back.** The banner under the card carries an `Undo`, which
 reverses the grade just made. The API does not run the schedule backwards — it
@@ -158,7 +251,7 @@ Nothing is written — accepting goes through the ordinary edit endpoint, so the
 is one path that changes a card and one place its schedule resets. Needs
 `GEMINI_API_KEY`; without one it says so rather than failing obscurely.
 
-## Exporting
+## Exporting and importing
 
 A deck downloads from the bottom of its own page. CSV for a spreadsheet, TSV for
 Anki, which prefers tabs because card text contains commas far more often than
@@ -174,19 +267,30 @@ with the cards — silent corruption of exactly the data someone exports because
 they care about it. Fields are quoted per RFC 4180, and the API's tests parse the
 output back rather than comparing it against strings the same code produced.
 
+Cards come back in from the deck's card list. It reads the columns the export
+writes, so a deck exported and imported elsewhere arrives with its questions,
+answers, hints and schedule intact. The delimiter is read from the file name and
+otherwise sniffed from the header line, and a file with no header is read
+positionally as question, answer, hint.
+
+It reports what it did. "Added 12" on its own hides the case worth knowing
+about, so the rows it skipped are named rather than counted — a blank line at the
+end of a spreadsheet is normal, and a reader should be able to see that that is
+all it was. A file over the size limit is refused rather than imported in part:
+an import that quietly stopped halfway would leave someone believing a deck was
+complete when it was not.
+
 ## Not built yet
 
-- **Automated end-to-end tests.** `scripts/shots*.mjs` drive a real sign-in, the
-  study gestures, a pointer drag, the stats page, a download and an undo, and
-  fail on console errors — but they are a look rather than a suite. The plan is a
-  Playwright run covering register → Mailpit → verify → login → deck → upload →
-  generate → review.
+- **Automated end-to-end tests.** `scripts/shots*.mjs` sign in for real and
+  screenshot their way through a study session, the stats page, a download and
+  an undo, failing on console errors — but they are a look rather than a suite.
+  They print `FAILED` and still exit 0, so they cannot fail a CI run, six of the
+  seven have no npm alias, and none of them performs a pointer drag: the swipe
+  gesture is only ever driven by keyboard. The plan is a Playwright run covering
+  register → Mailpit → verify → login → deck → upload → generate → review.
 - **Email verification and MFA are reachable but not exercised by a test.** The
   screens handle the states; nothing asserts them.
-- **Only the first 50 cards** load into review or study. `Load more` covers the
-  review screen; study does not page yet.
-- **Undo is unreachable on the last card of a session.** Grading the final card
-  finishes the session and swaps in the summary, which has no `Undo` on it — so
-  the one grade you cannot take back is the one that ended the session.
-- **Import.** Decks can be exported as CSV or TSV, but not brought in — there is
-  no CSV or Anki import.
+- **The knowledge map's term layer is synthetic** — the backend derives terms
+  from deck titles and says so through `graph.placeholder`, which the page
+  shows rather than hiding. Real extraction is the unbuilt NLP work.
