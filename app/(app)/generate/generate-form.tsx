@@ -221,6 +221,17 @@ export function GenerateForm({
             </p>
           )}
 
+          {/* Not an error state, so not a banner: the screen works, it is just
+              hearing about progress the slow way. Said quietly, because there
+              is nothing here for the reader to act on — and only when polling
+              has not already given up, which is the louder thing to know. */}
+          {poll.subscriptionRefused && !poll.stalled ? (
+            <p className="text-sm text-ink-subtle">
+              Live updates are unavailable for this deck, so this page is
+              checking for progress itself.
+            </p>
+          ) : null}
+
           {current.provider ? (
             <p className="text-sm text-ink-subtle">
               Generator: {current.provider}

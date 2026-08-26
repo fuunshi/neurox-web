@@ -759,5 +759,17 @@ export interface JobUpdatedMessage {
   cardsCreated: number | null;
 }
 
+/**
+ * A message the socket would not carry out.
+ *
+ * `topic` is present when a **subscription was refused**, and carries the name
+ * the client asked for. It is absent when a handler failed, which is not about
+ * any one subscription. The server decides which; see its `realtime.types.ts`.
+ */
+export interface RealtimeErrorMessage {
+  topic?: string;
+  message: string;
+}
+
 /** Connection state, for the one place that shows it. */
 export type RealtimeStatus = "connecting" | "live" | "offline";

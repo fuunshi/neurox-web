@@ -6,6 +6,7 @@ import {
   TERMINAL_JOB_STATUSES,
   type GenerationJob,
   type JobUpdatedMessage,
+  type RealtimeErrorMessage,
 } from "@/lib/api-types";
 import { ApiError } from "@/lib/errors";
 import {
@@ -25,18 +26,31 @@ const MAX_ATTEMPTS = 80;
 /** The event the API pushes when a generation run changes state. */
 const JOB_UPDATED_EVENT = "job:updated";
 
+/** The event the API answers on when it will not carry out a message — here,
+ *  a subscription it refused. */
+const REALTIME_ERROR_EVENT = "realtime:error";
+
 export interface JobPollState {
   job: GenerationJob | null;
   /** Set when polling itself failed, not when the job failed. */
   error: ApiError | null;
   /** True when polling gave up without the job finishing. */
   stalled: boolean;
+  /** True when the server refused this client's subscription to the deck, so
+   *  pushes will not arrive and polling is the only way this screen hears
+   *  anything. Not an error: the screen still works, it just works the slower
+   *  way, and saying so is better than looking identical to a quiet deck. */
+  subscriptionRefused: boolean;
 }
 
 export interface JobPollResult extends JobPollState {
   /** Polls again after giving up — for a job that is still running server-side. */
   restart: () => void;
 }
+
+/** What this hook stores. `subscriptionRefused` is absent because it is derived
+ *  from which topic was refused rather than stored — see the return below. */
+type JobPollCore = Omit<JobPollState, "subscriptionRefused">;
 
 /**
  * Follows a generation job until it reaches a terminal status.
@@ -69,7 +83,7 @@ export function useJobPoll(
    *  Without it, notifications still arrive; only deck-scoped pushes are missed. */
   deckId?: string | null,
 ): JobPollResult {
-  const [state, setState] = useState<JobPollState>({
+  const [state, setState] = useState<JobPollCore>({
     job: initialJob,
     error: null,
     stalled: false,
@@ -81,6 +95,10 @@ export function useJobPoll(
   // Bumped by `restart`. It is in the effect's dependencies precisely so that
   // asking for another round tears the old interval down and starts a new one.
   const [round, setRound] = useState(0);
+  // Which topic was refused, rather than a boolean about "the current one":
+  // keyed by name, switching decks clears the flag by itself, with no effect
+  // setting state on the way in.
+  const [refusedTopic, setRefusedTopic] = useState<string | null>(null);
   // Whether the interval is still wanted. A ref rather than state because the
   // socket's nudge and the interval's own tick both consult it without wanting
   // a re-render.
@@ -181,10 +199,30 @@ export function useJobPoll(
     if (!deckId) return;
 
     const topic = `deck:${deckId}`;
+
+    // A refusal is answered, not silent — and without reading it, a refused
+    // subscription is indistinguishable from a deck where nothing is happening.
+    const offRefusal = onRealtimeEvent(REALTIME_ERROR_EVENT, (payload) => {
+      const message = payload as RealtimeErrorMessage | null;
+      // Only this deck's refusal. A handler failure carries no topic, and a
+      // refusal for some other topic says nothing about this subscription.
+      if (message?.topic !== topic) return;
+      setRefusedTopic(topic);
+    });
+
     subscribeTopic(topic);
 
-    return () => unsubscribeTopic(topic);
+    return () => {
+      offRefusal();
+      unsubscribeTopic(topic);
+    };
   }, [deckId]);
 
-  return { ...state, restart };
+  return {
+    ...state,
+    // Derived rather than stored, so it cannot disagree with the deck this hook
+    // is actually watching.
+    subscriptionRefused: deckId != null && refusedTopic === `deck:${deckId}`,
+    restart,
+  };
 }
