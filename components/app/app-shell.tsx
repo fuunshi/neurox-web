@@ -8,7 +8,9 @@ import { Wordmark } from "@/components/marketing/wordmark";
 import { Button } from "@/components/ui/button";
 import { authFetch } from "@/lib/api/client";
 import { isSectionActive, MOBILE_NAV } from "@/lib/app-nav";
+import { disconnectRealtime } from "@/lib/realtime/client";
 import { cn } from "@/lib/utils/cn";
+import { NotificationBell } from "./notification-bell";
 import { Sidebar } from "./sidebar";
 
 /**
@@ -46,6 +48,7 @@ export function AppShell({
 
           <div className="ml-auto flex items-center gap-2">
             <ThemeSwitcher className="hidden md:inline-flex" />
+            <NotificationBell />
             <UserMenu
               viewer={viewer}
               open={menuOpen}
@@ -122,6 +125,10 @@ function UserMenu({
 
   async function signOut() {
     setPending(true);
+    // Closed before the request, not after: the socket is authenticated as the
+    // account that is on its way out, and there is no reason to keep it open
+    // while the sign-out is in flight.
+    disconnectRealtime();
     await authFetch("logout", { method: "POST" }).catch(() => undefined);
     // The cookie is already gone whichever way the call went, so this always
     // ends on the sign-in screen.

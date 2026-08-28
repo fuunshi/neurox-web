@@ -6,7 +6,7 @@ export const metadata = { title: "Sources" };
 export default async function SourcesPage() {
   // Both at once: the list and its yield are two reads of the same material,
   // and the page is useless until it has the list anyway.
-  const [{ data: sources }, analytics] = await Promise.all([
+  const [sources, analytics] = await Promise.all([
     listSources(),
     getGenerationAnalytics(),
   ]);

@@ -21,13 +21,22 @@ export function GenerateForm({
   decks,
   sources,
   preselectSourceId,
+  preselectDeckId,
 }: {
   decks: Array<{ id: string; title: string }>;
   sources: Array<{ id: string; title: string; characters: number }>;
   preselectSourceId?: string;
+  preselectDeckId?: string;
 }) {
   const { pending, error, submit, fieldErrors, setFieldErrors } = useSubmit();
-  const [deckId, setDeckId] = useState(decks[0]?.id ?? "");
+  // Checked against the list rather than trusted: a deck can be deleted between
+  // a link being shared and being followed, and a `<select>` whose value matches
+  // no option silently shows the first one while the state says otherwise.
+  const [deckId, setDeckId] = useState(
+    preselectDeckId && decks.some((deck) => deck.id === preselectDeckId)
+      ? preselectDeckId
+      : (decks[0]?.id ?? ""),
+  );
   const [sourceId, setSourceId] = useState(
     preselectSourceId && sources.some((s) => s.id === preselectSourceId)
       ? preselectSourceId
@@ -37,7 +46,10 @@ export function GenerateForm({
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<GenerationJob | null>(null);
 
-  const poll = useJobPoll(jobId, job);
+  // The deck comes from the job once there is one, and from the picker before
+  // that — so the socket subscription exists for the whole run rather than
+  // starting once the first poll lands.
+  const poll = useJobPoll(jobId, job, job?.deckId ?? deckId);
   const current = poll.job ?? job;
 
   async function onSubmit(event: React.FormEvent) {
@@ -174,20 +186,51 @@ export function GenerateForm({
       <Panel>
         <PanelBody className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
-            <Spinner className="size-5 text-accent" />
+            {/* The spinner only spins while something is actually being
+                watched. Once polling gives up it would be a lie, and a lie that
+                can run forever — so it is replaced by amber, which everywhere
+                else in the product means "needs your attention". */}
+            {poll.stalled ? (
+              <Chip tone="due">Stopped watching</Chip>
+            ) : (
+              <Spinner className="size-5 text-accent" />
+            )}
             <p className="font-display text-lg">
-              {current.status === "RUNNING"
-                ? "Writing cards"
-                : "Waiting to start"}
+              {poll.stalled
+                ? "This is taking longer than usual"
+                : current.status === "RUNNING"
+                  ? "Writing cards"
+                  : "Waiting to start"}
             </p>
           </div>
 
           {/* Deliberately no percentage. `cardsCreated` is only written at the
               end, so any progress bar here would be invented. */}
-          <p className="text-ink-muted">
-            Reading the source a chunk at a time. This takes longer on a large
-            document, and longer still with a model behind it.
-          </p>
+          {poll.stalled ? (
+            <p className="text-ink-muted">
+              Nothing has failed — the job is still running on the server, and
+              this page has simply stopped checking. A large document, or a
+              model behind the generator, is the usual reason. You can keep
+              watching, or come back to the deck later; either way the cards
+              will be waiting.
+            </p>
+          ) : (
+            <p className="text-ink-muted">
+              Reading the source a chunk at a time. This takes longer on a large
+              document, and longer still with a model behind it.
+            </p>
+          )}
+
+          {/* Not an error state, so not a banner: the screen works, it is just
+              hearing about progress the slow way. Said quietly, because there
+              is nothing here for the reader to act on — and only when polling
+              has not already given up, which is the louder thing to know. */}
+          {poll.subscriptionRefused && !poll.stalled ? (
+            <p className="text-sm text-ink-subtle">
+              Live updates are unavailable for this deck, so this page is
+              checking for progress itself.
+            </p>
+          ) : null}
 
           {current.provider ? (
             <p className="text-sm text-ink-subtle">
@@ -196,6 +239,11 @@ export function GenerateForm({
           ) : null}
 
           <div className="flex flex-wrap gap-3">
+            {poll.stalled ? (
+              <Button variant="secondary" onClick={poll.restart}>
+                Keep watching
+              </Button>
+            ) : null}
             <Button
               variant="secondary"
               onClick={async () => {

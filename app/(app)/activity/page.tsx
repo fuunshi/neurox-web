@@ -10,7 +10,7 @@ export default async function ActivityPage() {
   // anything else, so the id comes from the session rather than a query string —
   // it never appears in a URL a reader could edit.
   const viewer = await getViewer();
-  const { data: activities } = await listActivity(viewer.id);
+  const activities = await listActivity(viewer.id);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -21,13 +21,13 @@ export default async function ActivityPage() {
         </p>
       </div>
 
-      {activities.length === 0 ? (
+      {activities.data.length === 0 ? (
         <EmptyState
           title="Nothing recorded yet"
           description="Adding a source, generating cards and editing a deck all show up here."
         />
       ) : (
-        <ActivityFeed activities={activities} />
+        <ActivityFeed initial={activities} viewerId={viewer.id} />
       )}
     </div>
   );

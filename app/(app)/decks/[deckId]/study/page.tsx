@@ -99,8 +99,8 @@ export default async function StudyPage({
       <StudySession
         deckId={deck.id}
         deckTitle={deck.title}
-        cards={pool.data}
-        stats={pool.stats}
+        pool={pool}
+        include={include}
         initialMode={initialMode}
       />
     </div>

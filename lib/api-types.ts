@@ -634,6 +634,30 @@ export interface CreateCardRequest {
   status?: CardStatus;
 }
 
+export type ImportFormat = "csv" | "tsv";
+
+export interface ImportCardsRequest {
+  content: string;
+  /** Omitted, the delimiter is sniffed from the header line. */
+  format?: ImportFormat;
+}
+
+export interface ImportCardsResult {
+  created: number;
+  /**
+   * One entry per unusable row, naming its line, and so also the count of them
+   * — the API does not send a separate total, because two numbers that must
+   * agree are two numbers that can disagree.
+   *
+   * They are not a failure: a spreadsheet with a blank line at the end is
+   * normal. They are reported rather than dropped in silence, so a row that did
+   * not make it can be fixed and imported again.
+   */
+  errors: string[];
+  /** The cards as created, so the list can show them without a refetch. */
+  cards: FlashCard[];
+}
+
 export interface CreateTextSourceRequest {
   title: string;
   text: string;
@@ -676,3 +700,76 @@ export interface UpdateProfileRequest {
   socialLinks?: string;
   preferences?: string;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Notifications and the realtime socket                                       */
+/* -------------------------------------------------------------------------- */
+
+/** The tones the product already uses, so a notification is legible in all
+ *  three schemes without a palette of its own. */
+export type NotificationTone =
+  | "neutral"
+  | "accent"
+  | "due"
+  | "success"
+  | "danger";
+
+/**
+ * A notification as the server renders it.
+ *
+ * `title`, `body` and `href` are produced from a template the server owns; the
+ * database holds only `type` and its parameters. So this is a *rendered* thing —
+ * there is no client-side template to keep in step, and rewording a message
+ * rewrites what every past notification says.
+ */
+export interface AppNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  href: string | null;
+  tone: NotificationTone;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationListResponse {
+  data: AppNotification[];
+  unreadCount: number;
+  hasMore: boolean;
+}
+
+/** What arrives on the socket when a notification is created. */
+export interface NotificationMessage {
+  notification: AppNotification;
+  unreadCount: number;
+}
+
+/**
+ * Progress on a generation run, pushed rather than polled.
+ *
+ * `status` is the queue's view of the job, which is authoritative: a worker that
+ * died mid-run leaves the database row saying RUNNING, and only the queue knows
+ * it failed.
+ */
+export interface JobUpdatedMessage {
+  jobId: string;
+  deckId: string;
+  status: GenerationJobStatus;
+  cardsCreated: number | null;
+}
+
+/**
+ * A message the socket would not carry out.
+ *
+ * `topic` is present when a **subscription was refused**, and carries the name
+ * the client asked for. It is absent when a handler failed, which is not about
+ * any one subscription. The server decides which; see its `realtime.types.ts`.
+ */
+export interface RealtimeErrorMessage {
+  topic?: string;
+  message: string;
+}
+
+/** Connection state, for the one place that shows it. */
+export type RealtimeStatus = "connecting" | "live" | "offline";

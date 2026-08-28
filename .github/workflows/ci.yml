@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+
+    env:
+      # Only the server reads this, and nothing here reaches the network: the
+      # build must not need a running API. It is set so a page that reads it at
+      # build time fails loudly on a missing value rather than silently
+      # prerendering with `undefined` baked in.
+      BACKEND_BASE_URL: http://localhost:3232
+      SESSION_COOKIE_SECURE: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack / pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `next typegen` runs first, so the route types exist before tsc reads
+      # them — a plain `tsc --noEmit` fails on a clean checkout without it.
+      - name: Type-check
+        run: pnpm run typecheck
+
+      # ESLint plus the colour-literal guard, which is the rule that keeps the
+      # three schemes working. It is part of `lint` rather than separate so a
+      # contributor cannot run half of it.
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Unit tests
+        run: pnpm run test
+
+      - name: Build
+        run: pnpm run build
