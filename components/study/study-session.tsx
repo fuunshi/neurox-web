@@ -22,6 +22,7 @@ import {
 } from "@/lib/study/modes";
 import { GridMode } from "./grid-mode";
 import { ModeSwitcher } from "./mode-switcher";
+import { ReadMode } from "./read-mode";
 import { SwipeMode } from "./swipe-mode";
 
 /**
@@ -134,6 +135,23 @@ export function StudySession({
       setLoadingMore(false);
     }
   }, [cursor, loadingMore, include, deckId]);
+
+  /**
+   * The pagination handle, handed to the modes that never grade.
+   *
+   * `loadNextPage` is otherwise driven by the grade that drained the queue —
+   * which works for Swipe and leaves Grid stuck on the first page of any deck
+   * larger than one. Grid and Read both need to ask for more themselves.
+   *
+   * Declared after `loadNextPage` rather than beside the other derived values:
+   * it closes over that callback, and reading it before its declaration is what
+   * the React compiler refuses to memoize around.
+   */
+  const loadMoreProps = {
+    hasMore: cursor !== null,
+    loadingMore,
+    onLoadMore: () => void loadNextPage(),
+  };
 
   /** Records a grade and advances the queue. */
   const grade = useCallback(
@@ -329,7 +347,15 @@ export function StudySession({
             >
               {deckTitle}
             </Link>{" "}
-            · {formatCount(cards.length, "card")} to get through
+            {/* The pool's own count, not `cards.length` — that is one API page,
+                so a two-hundred-card deck used to say "50 cards to get
+                through". */}
+            ·{" "}
+            {formatCount(
+              include === "all" ? stats.active : stats.due,
+              "card",
+            )}{" "}
+            to get through
             {stats.learning > 0 ? `, ${stats.learning} relearning` : ""}
           </p>
         </div>
@@ -346,22 +372,45 @@ export function StudySession({
 
       <FormBanner error={error} />
 
-      {mode === "swipe" ? (
-        <SwipeMode
-          card={current}
-          revealed={revealed}
-          onReveal={() => setRevealed((r) => !r)}
-          onGrade={grade}
-          onSkip={skip}
-          busy={busy}
-          done={done}
-          total={total}
-        />
-      ) : (
-        <GridMode cards={queue} />
-      )}
+      {renderMode()}
     </div>
   );
+
+  /**
+   * Which presentation the chosen mode gets.
+   *
+   * An exhaustive switch with a `never` guard rather than a ternary, so
+   * `lib/study/modes.ts`'s promise — that a new mode is an entry there and a
+   * component — is enforced by the compiler. A missing arm is a typecheck
+   * failure instead of a mode that silently renders nothing.
+   */
+  function renderMode() {
+    switch (mode) {
+      case "swipe":
+        return (
+          <SwipeMode
+            card={current}
+            revealed={revealed}
+            onReveal={() => setRevealed((r) => !r)}
+            onGrade={grade}
+            onSkip={skip}
+            busy={busy}
+            done={done}
+            total={total}
+          />
+        );
+      case "grid":
+        return <GridMode cards={queue} {...loadMoreProps} />;
+      case "read":
+        return <ReadMode cards={queue} {...loadMoreProps} />;
+      default: {
+        const unhandled: never = mode;
+        throw new Error(
+          `No component for study mode "${String(unhandled)}". Add an arm to renderMode().`,
+        );
+      }
+    }
+  }
 }
 
 /**
