@@ -1,0 +1,74 @@
+/*
+ * Motion, in one place.
+ *
+ * Every animation here is CSS-driven on purpose. `base.css` flattens
+ * `animation-duration` under `prefers-reduced-motion`, so a CSS animation is
+ * honoured automatically while a JS- or spring-driven one would have to
+ * remember to check. That single global rule is the whole reason this file can
+ * stay small.
+ *
+ * Two consequences follow from it, and they explain the shape of what is below:
+ *
+ *  1. **A keyframe may only end somewhere legible.** A reduced-motion reader
+ *     sees the `to` frame, held, and nothing else. So nothing here fades to
+ *     nothing or leaves the screen — a card that faded out would leave them
+ *     looking at an empty box.
+ *  2. **Anything that carries meaning is a class, not an animation.** That a
+ *     card was graded Good rather than Again is a colour on the element, so the
+ *     meaning survives the collapse intact even when the movement does not.
+ */
+
+/*
+ * A card that has just been graded.
+ *
+ * It holds where the reader put it and leans a little further, instead of
+ * snapping back to centre and then waiting on the network — which is what made
+ * the gesture feel like it had not been heard.
+ *
+ * `--nx-throw` is the drag distance, set inline by the component, so the motion
+ * carries on from the reader's hand rather than restarting from the middle. It
+ * is absent when the grade came from the keyboard, and there the small nudge
+ * stands on its own.
+ */
+@keyframes card-good {
+  to {
+    transform: translateX(calc(var(--nx-throw, 0px) * 1.3 + 14px)) rotate(2.2deg);
+  }
+}
+
+@keyframes card-again {
+  to {
+    transform: translateX(calc(var(--nx-throw, 0px) * 1.3 - 14px)) rotate(-2.2deg);
+  }
+}
+
+/*
+ * A card arriving.
+ *
+ * `from` only, with no `to`: the animation runs to the element's own resting
+ * state, so the collapsed version is simply the card, already in place. Writing
+ * a `to` here would be the mistake — it would become the state a reduced-motion
+ * reader is left holding.
+ */
+@keyframes card-in {
+  from {
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+/*
+ * The grade stamp landing.
+ *
+ * The `from` is transparent and the `to` is fully opaque, never the reverse:
+ * collapsed, this reads as a stamp that is simply already there.
+ */
+@keyframes stamp {
+  from {
+    transform: scale(0.86) rotate(-7deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(-2deg);
+    opacity: 1;
+  }
+}

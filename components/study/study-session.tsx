@@ -81,6 +81,15 @@ export function StudySession({
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  /**
+   * The grade currently being saved.
+   *
+   * Lives here rather than in `SwipeMode` because grading reaches `grade()` from
+   * four places — the drag, the buttons, keys 1–4 on the window listener, and
+   * Skip — and the keyboard is the one most readers use. A card that only
+   * acknowledged the gesture would go silent for them.
+   */
+  const [pendingRating, setPendingRating] = useState<ReviewRating | null>(null);
 
   const current = queue[0];
   /**
@@ -160,6 +169,10 @@ export function StudySession({
 
       setBusy(true);
       setError(null);
+      // Set before the request, cleared in `finally`: the card answers the
+      // gesture immediately rather than after the network, which is the whole
+      // difference between a swipe that feels heard and one that feels ignored.
+      setPendingRating(rating);
 
       try {
         const result = await apiFetch<ReviewResult>(
@@ -195,6 +208,7 @@ export function StudySession({
         );
       } finally {
         setBusy(false);
+        setPendingRating(null);
       }
     },
     [current, busy, queue, cursor, loadNextPage],
@@ -389,6 +403,10 @@ export function StudySession({
       case "swipe":
         return (
           <SwipeMode
+            // Keyed by the card, so the next one arrives as a fresh mount: the
+            // drag offset resets and the entrance animation replays without an
+            // effect to reset state on every change.
+            key={current?.id ?? "empty"}
             card={current}
             revealed={revealed}
             onReveal={() => setRevealed((r) => !r)}
@@ -397,6 +415,7 @@ export function StudySession({
             busy={busy}
             done={done}
             total={total}
+            pendingRating={pendingRating}
           />
         );
       case "grid":

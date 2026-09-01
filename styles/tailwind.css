@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./themes.css";
 @import "./typography.css";
+@import "./motion.css";
 @import "./base.css";
 @import "./components.css";
 
@@ -61,4 +62,14 @@
 
   --shadow-card: var(--shadow-card);
   --shadow-pop: var(--shadow-pop);
+
+  /*
+   * Motion, mapped so a component asks for `animate-card-good` the way it asks
+   * for any other utility. The keyframes themselves live in motion.css, next to
+   * the note about what a reduced-motion reader ends up seeing.
+   */
+  --animate-card-in: card-in 180ms ease-out both;
+  --animate-card-good: card-good 260ms ease-out both;
+  --animate-card-again: card-again 260ms ease-out both;
+  --animate-stamp: stamp 220ms ease-out both;
 }

@@ -125,6 +125,36 @@ export default function KitchenSinkPage() {
         />
       </section>
 
+      <section className="flex flex-col gap-4">
+        <h2 className="text-xl">A card being graded</h2>
+        <p className="max-w-prose text-ink-muted">
+          The two states Swipe puts a card in while its review is being saved.
+          Shown without the animation, because this page is for checking the
+          palette: the colour is the part that carries the meaning, and the only
+          part a reduced-motion reader sees. Deliberately no amber — amber means
+          &ldquo;needs your attention&rdquo;, and a card just graded is the
+          opposite of that.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center justify-between rounded-lg border border-success/60 bg-success-soft p-5">
+            <span className="font-display text-base text-ink-subtle">
+              Recalled
+            </span>
+            <span className="rounded-md border border-accent/40 bg-accent-soft px-2.5 py-1 text-sm text-accent">
+              Good
+            </span>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-danger/60 bg-danger-soft p-5">
+            <span className="font-display text-base text-ink-subtle">
+              Forgotten
+            </span>
+            <span className="rounded-md border border-danger/40 bg-danger-soft px-2.5 py-1 text-sm text-danger-fg">
+              Again
+            </span>
+          </div>
+        </div>
+      </section>
+
       <section className="flex flex-col gap-3">
         <h2 className="text-xl">Type scale</h2>
         <p className="font-display text-5xl">Reading is the work</p>

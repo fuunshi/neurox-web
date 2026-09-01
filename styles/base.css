@@ -58,9 +58,12 @@
   }
 
   /*
-   * Motion is opt-in per use. The one orchestrated moment on the home page and
-   * the flashcard flip both check this, so honouring the preference is a
-   * single rule rather than a per-component concern.
+   * Motion is opt-in per use. Everything animated in this project is a CSS
+   * animation or transition, which is exactly what this rule flattens — so
+   * honouring the preference stays one rule rather than a per-component
+   * concern. The study card's grade animations are written to survive it: they
+   * end somewhere legible, because this rule leaves a reduced-motion reader
+   * holding the last frame. See styles/motion.css.
    */
   @media (prefers-reduced-motion: reduce) {
     *,
