@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { FormBanner } from "@/components/auth/form-banner";
 import { Button, buttonStyles } from "@/components/ui/button";
@@ -21,8 +21,10 @@ import {
   type StudyModeId,
 } from "@/lib/study/modes";
 import { GridMode } from "./grid-mode";
+import { KeyboardLegend } from "./keyboard-legend";
 import { ModeSwitcher } from "./mode-switcher";
 import { ReadMode } from "./read-mode";
+import { SessionProgress } from "./session-progress";
 import { SwipeMode } from "./swipe-mode";
 
 /**
@@ -43,6 +45,7 @@ export function StudySession({
   pool,
   include,
   initialMode = DEFAULT_STUDY_MODE,
+  rail,
 }: {
   deckId: string;
   deckTitle: string;
@@ -50,9 +53,14 @@ export function StudySession({
   /** Which pool this is, so a continued page asks for the same one. */
   include: "due" | "all";
   initialMode?: StudyModeId;
+  /**
+   * Server-rendered content for the right-hand column, below the session's own
+   * progress. A slot rather than props, so the facts the page already fetched
+   * stay on the server instead of being handed to this component to pass on.
+   */
+  rail?: ReactNode;
 }) {
   const cards = pool.data;
-  const stats = pool.stats;
   const [mode, setMode] = useState<StudyModeId>(initialMode);
   const [queue, setQueue] = useState(cards);
   /**
@@ -350,43 +358,58 @@ export function StudySession({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl">Study</h1>
-          <p className="mt-1 text-ink-muted">
-            <Link
-              href={`/decks/${deckId}`}
-              className="text-accent hover:underline"
-            >
-              {deckTitle}
-            </Link>{" "}
-            {/* The pool's own count, not `cards.length` — that is one API page,
-                so a two-hundred-card deck used to say "50 cards to get
-                through". */}
-            ·{" "}
-            {formatCount(
-              include === "all" ? stats.active : stats.due,
-              "card",
-            )}{" "}
-            to get through
-            {stats.learning > 0 ? `, ${stats.learning} relearning` : ""}
-          </p>
+    /*
+     * Two columns from `lg` up. `lg` rather than `md` because the card is the
+     * thing being studied: at 48rem a 17rem rail would leave it under 30rem,
+     * which is a worse session in exchange for a tidier gutter. Below `lg` this
+     * is a plain column and the rail simply follows the card, which is the
+     * right order on a phone — the DOM order is already main-then-aside, so no
+     * `order` utilities are needed.
+     */
+    <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start lg:gap-8">
+      <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl">Study</h1>
+            {/* Just the deck. The counts that used to sit here are in the rail
+                now, and the same number in two places two centimetres apart
+                reads as a mistake rather than as emphasis. */}
+            <p className="mt-1 text-ink-muted">
+              <Link
+                href={`/decks/${deckId}`}
+                className="text-accent hover:underline"
+              >
+                {deckTitle}
+              </Link>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <ModeSwitcher value={mode} onChange={chooseMode} />
+            <Button variant="secondary" size="sm" onClick={shuffle}>
+              Shuffle
+            </Button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <ModeSwitcher value={mode} onChange={chooseMode} />
-          <Button variant="secondary" size="sm" onClick={shuffle}>
-            Shuffle
-          </Button>
-        </div>
+        <LastGradeBanner last={last} onUndo={undo} busy={busy} />
+
+        <FormBanner error={error} />
+
+        {renderMode()}
       </div>
 
-      <LastGradeBanner last={last} onUndo={undo} busy={busy} />
-
-      <FormBanner error={error} />
-
-      {renderMode()}
+      {/* Sticky, because Read's column scrolls far past the rail and a sidebar
+          that has scrolled away is not a sidebar. */}
+      <aside className="flex flex-col gap-4 lg:sticky lg:top-20">
+        <SessionProgress
+          done={done}
+          remaining={queue.length}
+          againCount={againCount}
+        />
+        {rail}
+        <KeyboardLegend mode={mode} revealed={revealed} />
+      </aside>
     </div>
   );
 

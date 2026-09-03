@@ -4,6 +4,7 @@ import Link from "next/link";
 import { buttonStyles } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StudySession } from "@/components/study/study-session";
+import { StudyFacts } from "@/components/study/study-facts";
 import type { Deck, StudyPool } from "@/lib/api-types";
 import { ApiError } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
@@ -95,13 +96,22 @@ export default async function StudyPage({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    /*
+     * `max-w-6xl`, not `max-w-3xl`: the session now carries a 17rem rail beside
+     * the card, and at the old cap the card column would have lost width to make
+     * room for it. Widening the page is what keeps the card the size it was.
+     */
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <StudySession
         deckId={deck.id}
         deckTitle={deck.title}
         pool={pool}
         include={include}
         initialMode={initialMode}
+        // Rendered here, on the server, from the pool already in hand — the
+        // session is a client component and has no business holding counts it
+        // only passes along.
+        rail={<StudyFacts stats={pool.stats} />}
       />
     </div>
   );
