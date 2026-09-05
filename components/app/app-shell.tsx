@@ -42,8 +42,12 @@ export function AppShell({
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur-sm">
         <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
+          {/* With the name. The marketing header, the footer and the auth shell
+              all show it; this was the only one of the four call sites hiding
+              it, which left the app's own chrome as the one place the product
+              went unnamed. */}
           <Link href="/home" className="rounded-md" aria-label="neurox, home">
-            <Wordmark showName={false} />
+            <Wordmark />
           </Link>
 
           <div className="ml-auto flex items-center gap-2">
