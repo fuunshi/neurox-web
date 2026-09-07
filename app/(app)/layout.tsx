@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app/app-shell";
+import { StreakChip, StreakChipSkeleton } from "@/components/app/streak-chip";
 import { ApiError } from "@/lib/errors";
 import { getViewer } from "@/lib/server/queries";
 import { LOGIN_PATH } from "@/lib/server/routes";
@@ -34,6 +36,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     viewer.email;
 
   return (
-    <AppShell viewer={{ name, email: viewer.email }}>{children}</AppShell>
+    <AppShell
+      viewer={{ name, email: viewer.email }}
+      // Suspended so the header does not wait on it. The streak is fetched here
+      // rather than awaited above because only the header needs it, and every
+      // page under this layout would otherwise pay for it.
+      header={
+        <Suspense fallback={<StreakChipSkeleton />}>
+          <StreakChip />
+        </Suspense>
+      }
+    >
+      {children}
+    </AppShell>
   );
 }

@@ -27,9 +27,19 @@ import { Sidebar } from "./sidebar";
  */
 export function AppShell({
   viewer,
+  header,
   children,
 }: {
   viewer: { name: string; email: string };
+  /**
+   * Server-rendered content for the top bar, to the left of the theme switcher.
+   *
+   * A slot rather than props because the streak is fetched on the server and
+   * this component is a client one — see `streak-chip.tsx`. Passed already
+   * wrapped in a `Suspense` boundary by the layout, so the bar paints without
+   * waiting on it.
+   */
+  header?: ReactNode;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -51,6 +61,7 @@ export function AppShell({
           </Link>
 
           <div className="ml-auto flex items-center gap-2">
+            {header}
             <ThemeSwitcher className="hidden md:inline-flex" />
             <NotificationBell />
             <UserMenu
