@@ -296,6 +296,14 @@ complete when it was not.
 
 ## Not built yet
 
+- **Studying across decks.** The home page opens with how many cards are due and
+  a "Start studying" button, and that button can only reach the deck list.
+  Study is per-deck — `/decks/[deckId]/study` — and nothing ranks decks by what
+  is waiting: `Deck` carries a `cardCount` and no due count, and there is no
+  aggregate endpoint. A true one-click start needs either `due` on `Deck` or a
+  `GET /study/next` that picks the deck with the most waiting. Until then the
+  button is a shortcut to the picker, and the block says what it is rather than
+  implying a session it cannot open.
 - **Automated end-to-end tests.** `scripts/shots*.mjs` sign in for real and
   screenshot their way through a study session, the stats page, a download and
   an undo, failing on console errors — but they are a look rather than a suite.
