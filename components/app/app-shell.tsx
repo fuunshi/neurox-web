@@ -11,6 +11,7 @@ import { isSectionActive, MOBILE_NAV } from "@/lib/app-nav";
 import { disconnectRealtime } from "@/lib/realtime/client";
 import { cn } from "@/lib/utils/cn";
 import { NotificationBell } from "./notification-bell";
+import { CommandPalette } from "./command-palette";
 import { Sidebar } from "./sidebar";
 
 /**
@@ -61,6 +62,7 @@ export function AppShell({
           </Link>
 
           <div className="ml-auto flex items-center gap-2">
+            <CommandPalette />
             {header}
             <ThemeSwitcher className="hidden md:inline-flex" />
             <NotificationBell />

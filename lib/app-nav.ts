@@ -34,6 +34,15 @@ export interface AppSection {
   /** One sentence saying what the section is for. Shown on the home cards. */
   description: string;
   icon: SectionIconId;
+  /**
+   * Other words a reader might reach for.
+   *
+   * The command palette matches on these as well as the label, because the
+   * label is not always the word in someone's head: nobody searches "Progress"
+   * for their streak, and nobody searches "Knowledge map" for a graph. Optional,
+   * and additive — the rail and the home cards ignore it.
+   */
+  keywords?: readonly string[];
 }
 
 export const APP_SECTIONS: readonly AppSection[] = [
@@ -43,6 +52,7 @@ export const APP_SECTIONS: readonly AppSection[] = [
     description:
       "Your collections of cards. This is where you study, and where a deck's schedule lives.",
     icon: "decks",
+    keywords: ["cards", "study", "review", "library"],
   },
   {
     href: "/sources",
@@ -50,6 +60,7 @@ export const APP_SECTIONS: readonly AppSection[] = [
     description:
       "The material you read from — a pasted chapter, an uploaded PDF or document.",
     icon: "sources",
+    keywords: ["notes", "reading", "upload", "material", "pdf"],
   },
   {
     href: "/generate",
@@ -57,6 +68,7 @@ export const APP_SECTIONS: readonly AppSection[] = [
     description:
       "Turn a source into draft cards. Nothing reaches a deck until you accept it.",
     icon: "generate",
+    keywords: ["draft", "ai", "write", "create"],
   },
   {
     href: "/quizzes",
@@ -64,6 +76,7 @@ export const APP_SECTIONS: readonly AppSection[] = [
     description:
       "Find out what you actually know. Quizzes never move your review schedule.",
     icon: "quizzes",
+    keywords: ["test", "multiple choice", "matching", "practice"],
   },
   {
     href: "/stats",
@@ -71,6 +84,7 @@ export const APP_SECTIONS: readonly AppSection[] = [
     description:
       "Your streak, when you study, how your quizzes go and what is coming up — all read from the review log.",
     icon: "progress",
+    keywords: ["streak", "stats", "retention", "analytics", "forecast"],
   },
   {
     href: "/map",
@@ -78,12 +92,14 @@ export const APP_SECTIONS: readonly AppSection[] = [
     description:
       "How your sources, decks and cards connect to one another.",
     icon: "map",
+    keywords: ["graph", "connections", "network"],
   },
   {
     href: "/activity",
     label: "Activity",
     description: "Everything that has happened, newest first.",
     icon: "activity",
+    keywords: ["history", "log", "feed", "recent"],
   },
 ] as const;
 
