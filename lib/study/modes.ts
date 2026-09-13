@@ -6,8 +6,10 @@
  * saved choice is read.
  *
  * The set is expected to grow (the intent was always "and so on": a list view, a
- * quiz, audio). Adding one should mean adding an entry here and a component that
- * renders `CardSurface` — nothing else.
+ * quiz, audio). Adding one means an entry here, a component that renders
+ * `CardSurface`, and an arm in `study-session.tsx`'s dispatch — which is
+ * exhaustive over `StudyModeId` with a `never` guard, so a missing arm is a
+ * typecheck failure rather than a mode that silently does nothing.
  */
 
 export const STUDY_MODES = [
@@ -22,6 +24,19 @@ export const STUDY_MODES = [
     id: "grid",
     label: "Grid",
     hint: "Everything at once, for scanning",
+    sequential: false,
+  },
+  {
+    id: "read",
+    label: "Read",
+    hint: "Question and answer together, like a page",
+    /**
+     * Not sequential, for the same reason as Grid: there is no position to
+     * track and nothing to reveal. The session's keydown effect returns early
+     * on this flag, so Read gets no grading keys — correct, because grading a
+     * card you only read is the mistake `grid-mode.tsx` warns about, and Swipe
+     * is where reviews are recorded.
+     */
     sequential: false,
   },
 ] as const;

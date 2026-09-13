@@ -122,6 +122,36 @@ export default async function HomePage() {
         ) : null}
       </header>
 
+      {/* ------------------------------------------------------ start studying */}
+      {/*
+        The first thing on the page, because it is the thing to do now. This was
+        the first tile of "Check this out" halfway down, which is where a
+        suggestion belongs and not where the next action does.
+
+        It links to the deck list rather than into a session, and that is a real
+        limitation rather than a choice: study is per-deck, `Deck` carries no due
+        count, and there is no endpoint that ranks decks by what is waiting. See
+        README, "Not built yet".
+      */}
+      {!brandNew && totals.dueNow > 0 ? (
+        <Panel>
+          <PanelBody className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="font-display text-3xl">
+                {formatCount(totals.dueNow, "card")} due now
+              </p>
+              <p className="mt-1 max-w-prose text-ink-muted">
+                These are on the edge of being forgotten. Reviewing them now is
+                worth more than reviewing them tomorrow.
+              </p>
+            </div>
+            <Link href="/decks" className={buttonStyles()}>
+              Start studying
+            </Link>
+          </PanelBody>
+        </Panel>
+      ) : null}
+
       {/* -------------------------------------------------- what is in the app */}
       <section className="flex flex-col gap-4">
         <div>
@@ -159,16 +189,6 @@ export default async function HomePage() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            {totals.dueNow > 0 ? (
-              <Suggestion
-                title={`${formatCount(totals.dueNow, "card")} due now`}
-                body="These are on the edge of being forgotten. Reviewing them now is worth more than reviewing them tomorrow."
-                href="/decks"
-                action="Start studying"
-                tone="due"
-              />
-            ) : null}
-
             {readySources.length > 0 ? (
               <Suggestion
                 title={`${formatCount(readySources.length, "source")} ready to generate`}
@@ -272,18 +292,23 @@ function Figure({
   );
 }
 
+/**
+ * A suggestion from the reader's own material.
+ *
+ * Secondary buttons throughout, now that the one primary action on this page is
+ * the quick-start block above: two filled buttons competing for the same click
+ * is how a page stops having a next step.
+ */
 function Suggestion({
   title,
   body,
   href,
   action,
-  tone = "accent",
 }: {
   title: string;
   body: string;
   href: string;
   action: string;
-  tone?: "accent" | "due";
 }) {
   return (
     <div className="flex flex-col justify-between gap-4 rounded-lg border border-line bg-surface p-5">
@@ -294,7 +319,7 @@ function Suggestion({
       <Link
         href={href}
         className={buttonStyles({
-          variant: tone === "due" ? "primary" : "secondary",
+          variant: "secondary",
           size: "sm",
           className: "self-start",
         })}

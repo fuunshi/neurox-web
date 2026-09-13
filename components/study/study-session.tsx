@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { FormBanner } from "@/components/auth/form-banner";
 import { Button, buttonStyles } from "@/components/ui/button";
@@ -21,7 +21,10 @@ import {
   type StudyModeId,
 } from "@/lib/study/modes";
 import { GridMode } from "./grid-mode";
+import { KeyboardLegend } from "./keyboard-legend";
 import { ModeSwitcher } from "./mode-switcher";
+import { ReadMode } from "./read-mode";
+import { SessionProgress } from "./session-progress";
 import { SwipeMode } from "./swipe-mode";
 
 /**
@@ -42,6 +45,7 @@ export function StudySession({
   pool,
   include,
   initialMode = DEFAULT_STUDY_MODE,
+  rail,
 }: {
   deckId: string;
   deckTitle: string;
@@ -49,9 +53,14 @@ export function StudySession({
   /** Which pool this is, so a continued page asks for the same one. */
   include: "due" | "all";
   initialMode?: StudyModeId;
+  /**
+   * Server-rendered content for the right-hand column, below the session's own
+   * progress. A slot rather than props, so the facts the page already fetched
+   * stay on the server instead of being handed to this component to pass on.
+   */
+  rail?: ReactNode;
 }) {
   const cards = pool.data;
-  const stats = pool.stats;
   const [mode, setMode] = useState<StudyModeId>(initialMode);
   const [queue, setQueue] = useState(cards);
   /**
@@ -80,6 +89,15 @@ export function StudySession({
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  /**
+   * The grade currently being saved.
+   *
+   * Lives here rather than in `SwipeMode` because grading reaches `grade()` from
+   * four places — the drag, the buttons, keys 1–4 on the window listener, and
+   * Skip — and the keyboard is the one most readers use. A card that only
+   * acknowledged the gesture would go silent for them.
+   */
+  const [pendingRating, setPendingRating] = useState<ReviewRating | null>(null);
 
   const current = queue[0];
   /**
@@ -135,6 +153,23 @@ export function StudySession({
     }
   }, [cursor, loadingMore, include, deckId]);
 
+  /**
+   * The pagination handle, handed to the modes that never grade.
+   *
+   * `loadNextPage` is otherwise driven by the grade that drained the queue —
+   * which works for Swipe and leaves Grid stuck on the first page of any deck
+   * larger than one. Grid and Read both need to ask for more themselves.
+   *
+   * Declared after `loadNextPage` rather than beside the other derived values:
+   * it closes over that callback, and reading it before its declaration is what
+   * the React compiler refuses to memoize around.
+   */
+  const loadMoreProps = {
+    hasMore: cursor !== null,
+    loadingMore,
+    onLoadMore: () => void loadNextPage(),
+  };
+
   /** Records a grade and advances the queue. */
   const grade = useCallback(
     async (rating: ReviewRating) => {
@@ -142,6 +177,10 @@ export function StudySession({
 
       setBusy(true);
       setError(null);
+      // Set before the request, cleared in `finally`: the card answers the
+      // gesture immediately rather than after the network, which is the whole
+      // difference between a swipe that feels heard and one that feels ignored.
+      setPendingRating(rating);
 
       try {
         const result = await apiFetch<ReviewResult>(
@@ -177,6 +216,7 @@ export function StudySession({
         );
       } finally {
         setBusy(false);
+        setPendingRating(null);
       }
     },
     [current, busy, queue, cursor, loadNextPage],
@@ -318,50 +358,101 @@ export function StudySession({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl">Study</h1>
-          <p className="mt-1 text-ink-muted">
-            <Link
-              href={`/decks/${deckId}`}
-              className="text-accent hover:underline"
-            >
-              {deckTitle}
-            </Link>{" "}
-            · {formatCount(cards.length, "card")} to get through
-            {stats.learning > 0 ? `, ${stats.learning} relearning` : ""}
-          </p>
+    /*
+     * Two columns from `lg` up. `lg` rather than `md` because the card is the
+     * thing being studied: at 48rem a 17rem rail would leave it under 30rem,
+     * which is a worse session in exchange for a tidier gutter. Below `lg` this
+     * is a plain column and the rail simply follows the card, which is the
+     * right order on a phone — the DOM order is already main-then-aside, so no
+     * `order` utilities are needed.
+     */
+    <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start lg:gap-8">
+      <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl">Study</h1>
+            {/* Just the deck. The counts that used to sit here are in the rail
+                now, and the same number in two places two centimetres apart
+                reads as a mistake rather than as emphasis. */}
+            <p className="mt-1 text-ink-muted">
+              <Link
+                href={`/decks/${deckId}`}
+                className="text-accent hover:underline"
+              >
+                {deckTitle}
+              </Link>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <ModeSwitcher value={mode} onChange={chooseMode} />
+            <Button variant="secondary" size="sm" onClick={shuffle}>
+              Shuffle
+            </Button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <ModeSwitcher value={mode} onChange={chooseMode} />
-          <Button variant="secondary" size="sm" onClick={shuffle}>
-            Shuffle
-          </Button>
-        </div>
+        <LastGradeBanner last={last} onUndo={undo} busy={busy} />
+
+        <FormBanner error={error} />
+
+        {renderMode()}
       </div>
 
-      <LastGradeBanner last={last} onUndo={undo} busy={busy} />
-
-      <FormBanner error={error} />
-
-      {mode === "swipe" ? (
-        <SwipeMode
-          card={current}
-          revealed={revealed}
-          onReveal={() => setRevealed((r) => !r)}
-          onGrade={grade}
-          onSkip={skip}
-          busy={busy}
+      {/* Sticky, because Read's column scrolls far past the rail and a sidebar
+          that has scrolled away is not a sidebar. */}
+      <aside className="flex flex-col gap-4 lg:sticky lg:top-20">
+        <SessionProgress
           done={done}
-          total={total}
+          remaining={queue.length}
+          againCount={againCount}
         />
-      ) : (
-        <GridMode cards={queue} />
-      )}
+        {rail}
+        <KeyboardLegend mode={mode} revealed={revealed} />
+      </aside>
     </div>
   );
+
+  /**
+   * Which presentation the chosen mode gets.
+   *
+   * An exhaustive switch with a `never` guard rather than a ternary, so
+   * `lib/study/modes.ts`'s promise — that a new mode is an entry there and a
+   * component — is enforced by the compiler. A missing arm is a typecheck
+   * failure instead of a mode that silently renders nothing.
+   */
+  function renderMode() {
+    switch (mode) {
+      case "swipe":
+        return (
+          <SwipeMode
+            // Keyed by the card, so the next one arrives as a fresh mount: the
+            // drag offset resets and the entrance animation replays without an
+            // effect to reset state on every change.
+            key={current?.id ?? "empty"}
+            card={current}
+            revealed={revealed}
+            onReveal={() => setRevealed((r) => !r)}
+            onGrade={grade}
+            onSkip={skip}
+            busy={busy}
+            done={done}
+            total={total}
+            pendingRating={pendingRating}
+          />
+        );
+      case "grid":
+        return <GridMode cards={queue} {...loadMoreProps} />;
+      case "read":
+        return <ReadMode cards={queue} {...loadMoreProps} />;
+      default: {
+        const unhandled: never = mode;
+        throw new Error(
+          `No component for study mode "${String(unhandled)}". Add an arm to renderMode().`,
+        );
+      }
+    }
+  }
 }
 
 /**

@@ -11,6 +11,7 @@ import { isSectionActive, MOBILE_NAV } from "@/lib/app-nav";
 import { disconnectRealtime } from "@/lib/realtime/client";
 import { cn } from "@/lib/utils/cn";
 import { NotificationBell } from "./notification-bell";
+import { CommandPalette } from "./command-palette";
 import { Sidebar } from "./sidebar";
 
 /**
@@ -27,9 +28,19 @@ import { Sidebar } from "./sidebar";
  */
 export function AppShell({
   viewer,
+  header,
   children,
 }: {
   viewer: { name: string; email: string };
+  /**
+   * Server-rendered content for the top bar, to the left of the theme switcher.
+   *
+   * A slot rather than props because the streak is fetched on the server and
+   * this component is a client one — see `streak-chip.tsx`. Passed already
+   * wrapped in a `Suspense` boundary by the layout, so the bar paints without
+   * waiting on it.
+   */
+  header?: ReactNode;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -42,11 +53,17 @@ export function AppShell({
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur-sm">
         <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
+          {/* With the name. The marketing header, the footer and the auth shell
+              all show it; this was the only one of the four call sites hiding
+              it, which left the app's own chrome as the one place the product
+              went unnamed. */}
           <Link href="/home" className="rounded-md" aria-label="neurox, home">
-            <Wordmark showName={false} />
+            <Wordmark />
           </Link>
 
           <div className="ml-auto flex items-center gap-2">
+            <CommandPalette />
+            {header}
             <ThemeSwitcher className="hidden md:inline-flex" />
             <NotificationBell />
             <UserMenu

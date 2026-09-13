@@ -121,13 +121,46 @@ export function formatInterval(days: number): string {
   return `in ${years} ${years === 1 ? "year" : "years"}`;
 }
 
-/** The order the grades appear in, and what each means. Kept beside the
- *  formatter so the buttons and any copy about them cannot drift apart. */
+/**
+ * The order the grades appear in, and what each means. Kept beside the
+ * formatter so the buttons and any copy about them cannot drift apart.
+ *
+ * `button` marks the grades that get a control on the card. Only the two the
+ * swipe gesture can reach do: a reader who never touches the keyboard should not
+ * have to read past four buttons to find the two they will actually use, and
+ * Hard and Easy are one keystroke away on 2 and 4 for anyone who wants them.
+ * The flag lives here rather than as a filter at the call site so this stays the
+ * one place the set is described — the Progress page still shows all four.
+ */
 export const REVIEW_GRADES = [
-  { rating: "AGAIN", label: "Again", key: "1", hint: "Blanked or wrong" },
-  { rating: "HARD", label: "Hard", key: "2", hint: "Recalled, with effort" },
-  { rating: "GOOD", label: "Good", key: "3", hint: "Recalled" },
-  { rating: "EASY", label: "Easy", key: "4", hint: "Immediate" },
+  {
+    rating: "AGAIN",
+    label: "Again",
+    key: "1",
+    hint: "Blanked or wrong",
+    button: true,
+  },
+  {
+    rating: "HARD",
+    label: "Hard",
+    key: "2",
+    hint: "Recalled, with effort",
+    button: false,
+  },
+  {
+    rating: "GOOD",
+    label: "Good",
+    key: "3",
+    hint: "Recalled",
+    button: true,
+  },
+  {
+    rating: "EASY",
+    label: "Easy",
+    key: "4",
+    hint: "Immediate",
+    button: false,
+  },
 ] as const;
 
 /** What the API recorded for a source, as words a reader recognises. */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import type { FlashCard, ReviewRating } from "@/lib/api-types";
 import { REVIEW_GRADES } from "@/lib/format";
@@ -23,7 +23,19 @@ export interface SwipeModeProps {
   busy: boolean;
   done: number;
   total: number;
+  /**
+   * The grade currently being saved, or null.
+   *
+   * Owned by the session rather than this component, because grading also
+   * arrives from the window keyboard listener — and a card that only
+   * acknowledged the gesture would go silent for anyone grading with keys.
+   */
+  pendingRating: ReviewRating | null;
 }
+
+/** The grades that get a control on the card. The set is described once in
+ *  `lib/format.ts`; this only asks which of them earn a button. */
+const BUTTON_GRADES = REVIEW_GRADES.filter((grade) => grade.button);
 
 /**
  * One card at a time: reveal, then grade.
@@ -33,9 +45,19 @@ export interface SwipeModeProps {
  * from noise.
  *
  * Dragging right means Good and left means Again: the two grades that cover
- * almost every review get the gesture, and the two rarer ones stay as buttons.
- * Every one of those routes has a keyboard equivalent, so the gesture is a
- * convenience rather than the only way through.
+ * almost every review get the gesture, and the same two get the buttons. Hard
+ * and Easy stay one keystroke away on 2 and 4, which keeps every route reachable
+ * without reading past four controls to find the two anyone actually uses.
+ *
+ * ## Answering the gesture
+ *
+ * A grade is saved the moment the card is released — the request is never held
+ * behind an animation, because jsdom does not run CSS animations and a reducer
+ * waiting on `animationend` would be a test that hangs and a real card that
+ * stalls. So the acknowledgement runs alongside the save rather than before it:
+ * the card holds where the reader put it, leans further, and takes a colour.
+ * The move is what makes the gesture feel heard; the colour is what survives for
+ * someone who asked for less motion.
  */
 export function SwipeMode({
   card,
@@ -46,9 +68,14 @@ export function SwipeMode({
   busy,
   done,
   total,
+  pendingRating,
 }: SwipeModeProps) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
+  /** Where the last committed throw ended, for the animation to carry on from.
+   *  Captured before `offset` is reset, since the animation outranks the inline
+   *  transform and needs the distance itself. */
+  const [throwDistance, setThrowDistance] = useState(0);
 
   const startX = useRef(0);
   const moved = useRef(0);
@@ -59,7 +86,7 @@ export function SwipeMode({
   const gradable = revealed && !busy;
 
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0 || !gradable) return;
+    if (event.button !== 0 || !gradable || pendingRating) return;
 
     startX.current = event.clientX;
     moved.current = 0;
@@ -85,6 +112,10 @@ export function SwipeMode({
     // nothing is recorded.
     if (Math.abs(offset) > SWIPE_THRESHOLD_PX) {
       const rating: ReviewRating = offset < 0 ? "AGAIN" : "GOOD";
+      // Reset the inline transform, but remember the throw first: the pending
+      // animation is what the reader sees from here, and if the save fails the
+      // card is simply back at centre with nothing left to unwind.
+      setThrowDistance(offset);
       setOffset(0);
       onGrade(rating);
       return;
@@ -105,9 +136,12 @@ export function SwipeMode({
 
   const progress = total > 0 ? (done / total) * 100 : 0;
   const committing = dragging && Math.abs(offset) > SWIPE_THRESHOLD_PX;
+  // The grade being saved wins over the drag: after release, the card is
+  // answering rather than following a finger.
+  const answering = pendingRating ?? null;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className={cn("flex flex-col gap-5", "animate-card-in")}>
       <div
         // `touch-action: pan-y` leaves vertical scrolling to the browser while
         // claiming horizontal drags for the card.
@@ -121,34 +155,60 @@ export function SwipeMode({
           type="button"
           onClick={onCardClick}
           aria-label={revealed ? "Hide the answer" : "Show the answer"}
-          style={{ transform: `translateX(${offset}px)` }}
+          style={
+            {
+              transform: `translateX(${offset}px)`,
+              // Read by the keyframes in styles/motion.css. A custom property
+              // rather than a class because the value is the reader's own drag,
+              // and `as CSSProperties` because TypeScript does not accept custom
+              // properties in a typed style object.
+              "--nx-throw": `${throwDistance}px`,
+            } as CSSProperties
+          }
           className={cn(
             "flex min-h-[18rem] w-full flex-col rounded-lg border bg-surface p-6 text-left shadow-card sm:min-h-[22rem] sm:p-10",
-            committing
-              ? offset < 0
-                ? "cursor-grabbing border-danger/60"
-                : "cursor-grabbing border-accent"
-              : "cursor-pointer border-line",
+            // The colour is the part that survives reduced motion, so it carries
+            // the meaning on its own: green for Good, the danger tone Again
+            // already had while dragging. Amber is deliberately absent — it
+            // means "needs your attention" everywhere in this product, and a
+            // card just graded is the opposite of that.
+            answering === "GOOD"
+              ? "cursor-default border-success/60 bg-success-soft animate-card-good"
+              : answering === "AGAIN"
+                ? "cursor-default border-danger/60 bg-danger-soft animate-card-again"
+                : committing
+                  ? offset < 0
+                    ? "cursor-grabbing border-danger/60"
+                    : "cursor-grabbing border-accent"
+                  : "cursor-pointer border-line",
             // No transition while dragging: the card should track the pointer
-            // exactly. The global reduced-motion rule flattens the snap-back.
-            dragging ? "" : "transition-transform duration-200",
+            // exactly. None while answering either, or the transition fights the
+            // animation for the same property.
+            dragging || answering
+              ? ""
+              : "transition-transform duration-200",
           )}
         >
           <CardSurface card={card} side={revealed ? "back" : "front"} />
         </button>
 
-        {/* Where the swipe would land, shown only mid-drag past the threshold. */}
-        {committing ? (
+        {/* Where the swipe would land, and then where it did — shown from the
+            moment the threshold is crossed until the save settles, so releasing
+            reads as stamped rather than as a label that was always there. */}
+        {committing || answering ? (
           <span
             aria-hidden
             className={cn(
               "pointer-events-none absolute top-1/2 -translate-y-1/2 rounded-md border px-2.5 py-1 text-sm",
-              offset < 0
+              (answering ?? (offset < 0 ? "AGAIN" : "GOOD")) === "AGAIN"
                 ? "left-3 border-danger/40 bg-danger-soft text-danger-fg"
                 : "right-3 border-accent/40 bg-accent-soft text-accent",
+              answering && "animate-stamp",
             )}
           >
-            {offset < 0 ? "Again" : "Good"}
+            {(answering ?? (offset < 0 ? "AGAIN" : "GOOD")) === "AGAIN"
+              ? "Again"
+              : "Good"}
           </span>
         ) : null}
       </div>
@@ -171,14 +231,14 @@ export function SwipeMode({
         {revealed ? (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              {REVIEW_GRADES.map((grade) => (
+              {BUTTON_GRADES.map((grade) => (
                 <Button
                   key={grade.rating}
-                  size="sm"
                   variant={grade.rating === "GOOD" ? "primary" : "secondary"}
                   disabled={busy}
                   onClick={() => onGrade(grade.rating)}
                   title={grade.hint}
+                  aria-keyshortcuts={grade.key}
                 >
                   {grade.label}
                   <span
@@ -191,7 +251,6 @@ export function SwipeMode({
               ))}
 
               <Button
-                size="sm"
                 variant="ghost"
                 onClick={onSkip}
                 disabled={busy}
@@ -202,18 +261,15 @@ export function SwipeMode({
             </div>
 
             <p className="text-sm text-ink-subtle">
-              Swipe left for Again, right for Good. Keys 1–4 grade; space hides
-              the answer.
+              Swipe left for Again, right for Good. Keys 1–4 grade, with Hard and
+              Easy on 2 and 4; space hides the answer.
             </p>
           </>
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" onClick={onReveal}>
-                Show answer
-              </Button>
+              <Button onClick={onReveal}>Show answer</Button>
               <Button
-                size="sm"
                 variant="ghost"
                 onClick={onSkip}
                 className="ml-auto"

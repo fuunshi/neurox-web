@@ -1,7 +1,16 @@
 import type { FlashCard } from "@/lib/api-types";
 import { cn } from "@/lib/utils/cn";
 
-export type CardSide = "front" | "back";
+/**
+ * `front` and `back` are the two faces of one card mid-session. `both` is the
+ * same content read as a page rather than flipped — and it renders the `Back`
+ * markup exactly, because `Back` already keeps the question above the answer.
+ *
+ * There is deliberately no third rendering: a reader checking their memory and a
+ * reader reading straight through should see the same card, and a second card
+ * language for the same content is what this file exists to prevent.
+ */
+export type CardSide = "front" | "back" | "both";
 
 /**
  * One card, whichever side is showing.

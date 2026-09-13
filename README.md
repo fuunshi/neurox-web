@@ -199,16 +199,28 @@ would be refused for being unverified.
 
 ## Studying
 
-Study is **scheduled**, not just displayed. Cards are graded with four buttons
-(Again / Hard / Good / Easy, or keys 1–4) and the API reschedules them.
+Study is **scheduled**, not just displayed. Cards are graded with the two
+controls the gesture can reach (Again / Good) or with keys 1–4, and the API
+reschedules them. Hard and Easy are keys 2 and 4 — present, but not competing
+for attention on every card. The full four-way mix, "How you grade yourself", is
+on **Progress**, which is the page built to answer that question.
 
 - **Swipe** — one card at a time. Reveal with a tap or space, then grade. Swipe
   right for Good, left for Again; the buttons and keys do the same. Grading is
   refused until the answer is showing — grading something you have not checked
   is guessing at your own memory, and the schedule would learn from noise.
+
+  Released past the threshold, the card **holds where you put it**, leans
+  further and takes a colour while the review is saved. The save is never held
+  behind the animation: it starts on release, and the movement runs alongside it.
+  The colour is the part that matters, because `prefers-reduced-motion` flattens
+  the movement and leaves the meaning intact — see `styles/motion.css`.
 - **Grid** — every card at once, each flipping on its own. For scanning a deck.
   **It does not grade**, and says so: a tile has no honest way to ask "how well
   did you know that?" between two other tiles.
+- **Read** — both sides of every card, in order, as a page. For material that is
+  new, for checking a deck is coherent, or for simply reading it. **It does not
+  grade** either, and says so on the screen.
 
 `Again` returns the card **within the session** — it moves to the back of the
 queue rather than leaving it, and progress is `done / (done + remaining)`, so the
@@ -231,10 +243,12 @@ of a card can be undone, since reversing an older one would leave every review
 after it describing a schedule that no longer exists. Rows written before the
 snapshot existed are refused rather than guessed at.
 
-Both modes render `components/study/card-surface.tsx` rather than their own
-markup, so a third mode (a list, a quiz, audio) is a component plus an entry in
-`lib/study/modes.ts` — nothing else. Modes are presenters; the session owns the
-cards and the position.
+Every mode renders `components/study/card-surface.tsx` rather than its own
+markup, so a new mode (a list, a quiz, audio) is a component plus an entry in
+`lib/study/modes.ts` — and an arm in `study-session.tsx`'s dispatch, which is an
+exhaustive switch with a `never` guard, so a mode with no arm fails the
+typecheck rather than silently rendering nothing. Modes are presenters; the
+session owns the cards and the position.
 
 The scheduling itself is a pure function on the backend
 (`src/application/study/scheduling.ts`) with 22 tests, because a scheduling bug
@@ -282,6 +296,14 @@ complete when it was not.
 
 ## Not built yet
 
+- **Studying across decks.** The home page opens with how many cards are due and
+  a "Start studying" button, and that button can only reach the deck list.
+  Study is per-deck — `/decks/[deckId]/study` — and nothing ranks decks by what
+  is waiting: `Deck` carries a `cardCount` and no due count, and there is no
+  aggregate endpoint. A true one-click start needs either `due` on `Deck` or a
+  `GET /study/next` that picks the deck with the most waiting. Until then the
+  button is a shortcut to the picker, and the block says what it is rather than
+  implying a session it cannot open.
 - **Automated end-to-end tests.** `scripts/shots*.mjs` sign in for real and
   screenshot their way through a study session, the stats page, a download and
   an undo, failing on console errors — but they are a look rather than a suite.

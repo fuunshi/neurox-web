@@ -2,11 +2,16 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { LoadMore } from "@/components/ui/load-more";
 import type { FlashCard } from "@/lib/api-types";
 import { CardSurface } from "./card-surface";
 
 export interface GridModeProps {
   cards: FlashCard[];
+  /** Whether the pool has another page the session could pull in. */
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }
 
 /**
@@ -26,7 +31,12 @@ export interface GridModeProps {
  * matters more than it sounds: the alternative is a reader studying here for an
  * hour and finding nothing was recorded.
  */
-export function GridMode({ cards }: GridModeProps) {
+export function GridMode({
+  cards,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+}: GridModeProps) {
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set());
 
   function toggle(id: string) {
@@ -95,6 +105,17 @@ export function GridMode({ cards }: GridModeProps) {
           ? ` · ${revealed.size} answer${revealed.size === 1 ? "" : "s"} revealed`
           : ""}
       </p>
+
+      {/* The grid never grades, and grading was the only thing that pulled the
+          next page in — so without this the deck stopped at the first page and
+          said nothing about it. */}
+      <LoadMore
+        shown={cards.length}
+        hasMore={hasMore}
+        loading={loadingMore}
+        onLoadMore={onLoadMore}
+        noun="card"
+      />
     </div>
   );
 }

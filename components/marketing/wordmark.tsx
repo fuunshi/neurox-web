@@ -4,14 +4,12 @@ import { cn } from "@/lib/utils/cn";
  * The ring is a quarter complete. It reads as an aperture — an iris — and as
  * progress through material, which is the same idea either way: partly learned
  * is the normal state, not a failure state.
+ *
+ * The name is always shown. There used to be a `showName` flag, because the app
+ * header wanted the mark alone; every surface shows both now, so the flag was
+ * an option with one value.
  */
-export function Wordmark({
-  className,
-  showName = true,
-}: {
-  className?: string;
-  showName?: boolean;
-}) {
+export function Wordmark({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
       <svg
@@ -36,11 +34,9 @@ export function Wordmark({
           strokeLinecap="round"
         />
       </svg>
-      {showName ? (
-        <span className="font-display text-xl tracking-tight text-ink">
-          neurox
-        </span>
-      ) : null}
+      <span className="font-display text-xl tracking-tight text-ink">
+        neurox
+      </span>
     </span>
   );
 }
