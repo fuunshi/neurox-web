@@ -125,10 +125,10 @@ export function formatInterval(days: number): string {
  * The order the grades appear in, and what each means. Kept beside the
  * formatter so the buttons and any copy about them cannot drift apart.
  *
- * `button` marks the grades that get a control on the card. Only the two the
- * swipe gesture can reach do: a reader who never touches the keyboard should not
- * have to read past four buttons to find the two they will actually use, and
- * Hard and Easy are one keystroke away on 2 and 4 for anyone who wants them.
+ * `button` marks the grades that get a control on the card. Only the two that
+ * carry almost every review do: a reader should not have to read past four
+ * buttons to find the two they will actually use, and Hard and Easy are one
+ * keystroke away on 2 and 4 for anyone who wants them.
  * The flag lives here rather than as a filter at the call site so this stays the
  * one place the set is described — the Progress page still shows all four.
  */

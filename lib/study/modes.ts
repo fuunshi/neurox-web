@@ -14,9 +14,16 @@
 
 export const STUDY_MODES = [
   {
+    /**
+     * The id stays `swipe` although nothing swipes any more. It is written into
+     * the `nx_study_mode` cookie, so changing it would silently reset the choice
+     * of everyone who has already made one — the id is the contract, the label
+     * is only what a reader sees. The drag went because it could not be done
+     * from a keyboard and duplicated the buttons exactly; see `review-mode.tsx`.
+     */
     id: "swipe",
-    label: "Swipe",
-    hint: "One card at a time, dragged or arrow-keyed",
+    label: "Review",
+    hint: "One card at a time, graded",
     /** Presents a single card, so the session tracks position. */
     sequential: true,
   },

@@ -223,3 +223,68 @@ describe("StudySession continuation", () => {
     expect(poolRequests).toHaveLength(1);
   });
 });
+
+describe("StudySession arrow keys", () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+  });
+
+  /** The rating the session sent, for the call that was not a pool fetch. */
+  function gradedRating(): unknown {
+    const call = apiFetch.mock.calls.find((entry) =>
+      String(entry[0]).includes("/review"),
+    );
+    return (call?.[1] as { body?: { rating?: unknown } } | undefined)?.body
+      ?.rating;
+  }
+
+  it("grades with the arrows the keyboard legend promises", async () => {
+    const user = userEvent.setup();
+    apiFetch.mockResolvedValue(gradeResult("GOOD"));
+
+    renderSession([card("c1"), card("c2")]);
+    // Focus lands on this button, which is exactly where a reader grading with
+    // the keyboard is — so the arrows must work from a control, not only from
+    // the body.
+    await user.click(screen.getByRole("button", { name: "Show answer" }));
+
+    await user.keyboard("{ArrowRight}");
+
+    expect(gradedRating()).toBe("GOOD");
+  });
+
+  it("grades Again on the left arrow", async () => {
+    const user = userEvent.setup();
+    apiFetch.mockResolvedValue(gradeResult("AGAIN"));
+
+    renderSession([card("c1"), card("c2")]);
+    await user.click(screen.getByRole("button", { name: "Show answer" }));
+    await user.keyboard("{ArrowLeft}");
+
+    expect(gradedRating()).toBe("AGAIN");
+  });
+
+  it("does not grade with an arrow before the answer is showing", async () => {
+    const user = userEvent.setup();
+    apiFetch.mockResolvedValue(gradeResult("GOOD"));
+
+    renderSession([card("c1"), card("c2")]);
+    await user.keyboard("{ArrowRight}");
+
+    expect(gradedRating()).toBeUndefined();
+  });
+
+  it("leaves the arrows alone when the mode switcher has focus", async () => {
+    // The switcher is a radiogroup and owns ArrowLeft/Right. If these graded as
+    // well, changing mode would silently record a review.
+    const user = userEvent.setup();
+    apiFetch.mockResolvedValue(gradeResult("GOOD"));
+
+    renderSession([card("c1"), card("c2")]);
+    await user.click(screen.getByRole("button", { name: "Show answer" }));
+    await user.click(screen.getByRole("radio", { name: /^Grid/ }));
+    await user.keyboard("{ArrowRight}");
+
+    expect(gradedRating()).toBeUndefined();
+  });
+});

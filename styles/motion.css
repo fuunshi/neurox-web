@@ -7,40 +7,23 @@
  * remember to check. That single global rule is the whole reason this file can
  * stay small.
  *
- * Two consequences follow from it, and they explain the shape of what is below:
+ * Three rules follow from it, and they explain the shape of what is below:
  *
  *  1. **A keyframe may only end somewhere legible.** A reduced-motion reader
- *     sees the `to` frame, held, and nothing else. So nothing here fades to
- *     nothing or leaves the screen — a card that faded out would leave them
- *     looking at an empty box.
+ *     sees the `to` frame, held, and nothing else. So nothing declared in the
+ *     ordinary way fades to nothing or leaves the screen.
  *  2. **Anything that carries meaning is a class, not an animation.** That a
  *     card was graded Good rather than Again is a colour on the element, so the
  *     meaning survives the collapse intact even when the movement does not.
+ *  3. **An exit is the one exception, and it takes a third form.** A card on its
+ *     way out genuinely *ends* off-screen, so collapsing it would leave a
+ *     reduced-motion reader holding a blank box until the next card rendered —
+ *     precisely what rule 1 exists to prevent. So the exit is scoped to
+ *     `no-preference` outright rather than declared generally and collapsed:
+ *     those readers get no exit animation at all, and the card is simply
+ *     replaced. The wash still applies to everyone, which is the part that says
+ *     how it was graded.
  */
-
-/*
- * A card that has just been graded.
- *
- * It holds where the reader put it and leans a little further, instead of
- * snapping back to centre and then waiting on the network — which is what made
- * the gesture feel like it had not been heard.
- *
- * `--nx-throw` is the drag distance, set inline by the component, so the motion
- * carries on from the reader's hand rather than restarting from the middle. It
- * is absent when the grade came from the keyboard, and there the small nudge
- * stands on its own.
- */
-@keyframes card-good {
-  to {
-    transform: translateX(calc(var(--nx-throw, 0px) * 1.3 + 14px)) rotate(2.2deg);
-  }
-}
-
-@keyframes card-again {
-  to {
-    transform: translateX(calc(var(--nx-throw, 0px) * 1.3 - 14px)) rotate(-2.2deg);
-  }
-}
 
 /*
  * A card arriving.
@@ -70,5 +53,29 @@
   to {
     transform: scale(1) rotate(-2deg);
     opacity: 1;
+  }
+}
+
+/*
+ * A card leaving, in the direction of the grade.
+ *
+ * A card on its way out genuinely ends off-screen, so this is scoped rather than
+ * relying on the global collapse — see rule 3 above. Under `reduce` the keyframe
+ * does not exist, the animation has no frames, and the card is replaced with no
+ * movement at all.
+ *
+ * The distance and the lean come from two custom properties the component sets
+ * inline, one pair per grade, so a single keyframe covers all four: Again and
+ * Easy travel furthest, Hard and Good half as far toward the same side. That is
+ * what the 1–4 ordering already means, so the keyboard route is graded in the
+ * same language as the buttons rather than a quieter one.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes card-exit {
+    to {
+      transform: translateX(var(--nx-exit-x, 0px))
+        rotate(var(--nx-exit-rotate, 0deg));
+      opacity: 0;
+    }
   }
 }

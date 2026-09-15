@@ -25,7 +25,7 @@ import { KeyboardLegend } from "./keyboard-legend";
 import { ModeSwitcher } from "./mode-switcher";
 import { ReadMode } from "./read-mode";
 import { SessionProgress } from "./session-progress";
-import { SwipeMode } from "./swipe-mode";
+import { ReviewMode } from "./review-mode";
 
 /**
  * A study session: the queue, the grading, and where you are.
@@ -92,7 +92,7 @@ export function StudySession({
   /**
    * The grade currently being saved.
    *
-   * Lives here rather than in `SwipeMode` because grading reaches `grade()` from
+   * Lives here rather than in `ReviewMode` because grading reaches `grade()` from
    * four places — the drag, the buttons, keys 1–4 on the window listener, and
    * Skip — and the keyboard is the one most readers use. A card that only
    * acknowledged the gesture would go silent for them.
@@ -178,8 +178,8 @@ export function StudySession({
       setBusy(true);
       setError(null);
       // Set before the request, cleared in `finally`: the card answers the
-      // gesture immediately rather than after the network, which is the whole
-      // difference between a swipe that feels heard and one that feels ignored.
+      // grade immediately rather than after the network, which is the whole
+      // difference between a card that feels heard and one that feels ignored.
       setPendingRating(rating);
 
       try {
@@ -283,11 +283,15 @@ export function StudySession({
   }, []);
 
   /**
-   * Space reveals; 1–4 grade once the answer is showing.
+   * Space reveals; 1–4 grade once the answer is showing, and the arrows grade
+   * the two that have buttons.
    *
    * Bound at the window so the keys work without hunting for a focus target.
    * Number keys are why the grades are labelled with them — grading a card
-   * should not need the mouse.
+   * should not need the mouse. The arrows were documented in the keyboard
+   * legend long before anything implemented them; they are here now, and gated
+   * on `!onControl` below so the mode switcher keeps its own ArrowLeft/Right
+   * when it holds focus.
    */
   useEffect(() => {
     if (!sequential) return;
@@ -304,18 +308,36 @@ export function StudySession({
         return;
       }
 
-      if (revealed && !busy) {
-        const grade_for: Record<string, ReviewRating> = {
-          "1": "AGAIN",
-          "2": "HARD",
-          "3": "GOOD",
-          "4": "EASY",
-        };
-        const rating = grade_for[event.key];
-        if (rating) {
-          event.preventDefault();
-          void grade(rating);
-        }
+      if (!revealed || busy) return;
+
+      // The arrows grade — ← is Again and → is Good, the direction the buttons
+      // sit in, which is also the direction the card leaves in.
+      //
+      // Refused only inside the mode switcher, which is a radiogroup and owns
+      // ArrowLeft/Right while it has focus. Deliberately not gated on *any*
+      // control: clicking "Show answer" leaves focus on that button, and the
+      // arrows have to work from there — that is the ordinary way through this
+      // screen, not an edge case.
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        if (target?.closest('[role="radiogroup"]')) return;
+        event.preventDefault();
+        void grade(event.key === "ArrowLeft" ? "AGAIN" : "GOOD");
+        return;
+      }
+
+      // Deliberately *not* gated on `onControl`: after clicking "Show answer"
+      // the focus is on that button, and the number keys are the main way
+      // through this screen — they have to work from there.
+      const grade_for: Record<string, ReviewRating> = {
+        "1": "AGAIN",
+        "2": "HARD",
+        "3": "GOOD",
+        "4": "EASY",
+      };
+      const rating = grade_for[event.key];
+      if (rating) {
+        event.preventDefault();
+        void grade(rating);
       }
     }
 
@@ -425,7 +447,7 @@ export function StudySession({
     switch (mode) {
       case "swipe":
         return (
-          <SwipeMode
+          <ReviewMode
             // Keyed by the card, so the next one arrives as a fresh mount: the
             // drag offset resets and the entrance animation replays without an
             // effect to reset state on every change.
