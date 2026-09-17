@@ -199,28 +199,45 @@ would be refused for being unverified.
 
 ## Studying
 
-Study is **scheduled**, not just displayed. Cards are graded with the two
-controls the gesture can reach (Again / Good) or with keys 1–4, and the API
-reschedules them. Hard and Easy are keys 2 and 4 — present, but not competing
-for attention on every card. The full four-way mix, "How you grade yourself", is
-on **Progress**, which is the page built to answer that question.
+Study is **scheduled**, not just displayed. Cards are graded with a control for
+each of the two grades that carry almost every review (Again / Good) or with keys
+1–4, and the API reschedules them. Hard and Easy are keys 2 and 4 — present, but
+not competing for attention on every card. The full four-way mix, "How you grade
+yourself", is on **Progress**, which is the page built to answer that question.
 
-- **Swipe** — one card at a time. Reveal with a tap or space, then grade. Swipe
-  right for Good, left for Again; the buttons and keys do the same. Grading is
-  refused until the answer is showing — grading something you have not checked
-  is guessing at your own memory, and the schedule would learn from noise.
+- **Review** — one card at a time. Reveal with a tap or space, then grade with a
+  button, a number key, or `←` for Again and `→` for Good. Grading is refused
+  until the answer is showing — grading something you have not checked is
+  guessing at your own memory, and the schedule would learn from noise. The
+  controls are simply absent until then.
 
-  Released past the threshold, the card **holds where you put it**, leans
-  further and takes a colour while the review is saved. The save is never held
-  behind the animation: it starts on release, and the movement runs alongside it.
-  The colour is the part that matters, because `prefers-reduced-motion` flattens
-  the movement and leaves the meaning intact — see `styles/motion.css`.
+  The card **leaves in the direction of the grade** and the next one rises into
+  place. Again and Easy travel furthest, Hard and Good half as far toward the
+  same side, so grading with 2 and 4 is the same language rather than a quieter
+  one. The save is never held behind the animation: it starts on the click and
+  the movement runs alongside it.
+
+  Colour carries the meaning and movement does not: every grade turns the card
+  green except **Again**, which is the only one that means the card was not
+  recalled. That is why the wash is a class rather than a keyframe, and why the
+  exit is the one animation in this project scoped to `prefers-reduced-motion:
+  no-preference` — a card on its way out ends off-screen, so a reduced-motion
+  reader gets no exit at all and simply sees it replaced. See
+  `styles/motion.css`.
 - **Grid** — every card at once, each flipping on its own. For scanning a deck.
   **It does not grade**, and says so: a tile has no honest way to ask "how well
   did you know that?" between two other tiles.
 - **Read** — both sides of every card, in order, as a page. For material that is
   new, for checking a deck is coherent, or for simply reading it. **It does not
   grade** either, and says so on the screen.
+
+**There is no drag.** Grading used to be a swipe, and it was removed rather than
+fixed: it could not be done from a keyboard, it needed a fallback anyway for
+touch and for anyone using a screen reader, and that fallback was the buttons —
+so the gesture duplicated the controls while adding three bugs that only a
+pointer can have. The mode's `id` is still `swipe`, because it is written into
+the `nx_study_mode` cookie and changing it would silently reset the choice of
+everyone who had already made one; the label is what a reader sees.
 
 `Again` returns the card **within the session** — it moves to the back of the
 queue rather than leaving it, and progress is `done / (done + remaining)`, so the
@@ -307,9 +324,10 @@ complete when it was not.
 - **Automated end-to-end tests.** `scripts/shots*.mjs` sign in for real and
   screenshot their way through a study session, the stats page, a download and
   an undo, failing on console errors — but they are a look rather than a suite.
-  They print `FAILED` and still exit 0, so they cannot fail a CI run, six of the
-  seven have no npm alias, and none of them performs a pointer drag: the swipe
-  gesture is only ever driven by keyboard. The plan is a Playwright run covering
+  They print `FAILED` and still exit 0, so they cannot fail a CI run, and six of
+  the seven have no npm alias. (They used also to be unable to drive the swipe
+  gesture, which was pointer-only; there is no longer a gesture to miss, so that
+  particular hole has closed.) The plan is a Playwright run covering
   register → Mailpit → verify → login → deck → upload → generate → review.
 - **Email verification and MFA are reachable but not exercised by a test.** The
   screens handle the states; nothing asserts them.

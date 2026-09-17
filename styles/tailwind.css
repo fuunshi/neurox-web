@@ -64,12 +64,12 @@
   --shadow-pop: var(--shadow-pop);
 
   /*
-   * Motion, mapped so a component asks for `animate-card-good` the way it asks
-   * for any other utility. The keyframes themselves live in motion.css, next to
-   * the note about what a reduced-motion reader ends up seeing.
+   * Motion, mapped so a component asks for `animate-card-exit` the way it asks
+   * for any other utility. The keyframes live in motion.css, next to the note
+   * about what a reduced-motion reader ends up seeing — and `card-exit` is the
+   * one of these that does not exist under `reduce`, deliberately.
    */
   --animate-card-in: card-in 180ms ease-out both;
-  --animate-card-good: card-good 260ms ease-out both;
-  --animate-card-again: card-again 260ms ease-out both;
+  --animate-card-exit: card-exit 260ms ease-in both;
   --animate-stamp: stamp 220ms ease-out both;
 }
