@@ -5,6 +5,7 @@ import {
   jsonError,
   jsonOk,
 } from "@/lib/server/handler";
+import { ALLOWED_ROOTS } from "@/lib/server/proxy-roots";
 import { readSession } from "@/lib/server/session";
 import { readEnvelope, upstreamFetch } from "@/lib/server/upstream";
 
@@ -22,18 +23,6 @@ import { readEnvelope, upstreamFetch } from "@/lib/server/upstream";
  * own client code and the API validates regardless — an unknown property is a
  * 400 from the API, not a silent write.
  */
-
-/** API roots this proxy will reach. Anything else is a 404 before any network
- *  call is made. */
-const ALLOWED_ROOTS = new Set([
-  "decks",
-  "cards",
-  "sources",
-  "activities",
-  "user",
-  "generation",
-  "quizzes",
-]);
 
 type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
