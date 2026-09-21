@@ -773,3 +773,76 @@ export interface RealtimeErrorMessage {
 
 /** Connection state, for the one place that shows it. */
 export type RealtimeStatus = "connecting" | "live" | "offline";
+
+/*
+ * Public study material.
+ *
+ * Unlike everything above, these are not scoped to a reader — they describe
+ * rows that belong to nobody, which is what makes the pages that render them
+ * cacheable and shareable. They mirror `content-api` on the backend; the
+ * `Curriculum*` names match the API's response DTOs deliberately, so the two
+ * sides are greppable against each other.
+ */
+
+/** A level of the syllabus tree. */
+export type CurriculumKind = "COURSE" | "SEMESTER" | "SUBJECT" | "UNIT";
+
+/**
+ * One node of the syllabus tree.
+ *
+ * The API returns the tree **flat** with `parentPath` rather than nested
+ * children. `path` is the identity — every public URL below a course is a path
+ * prefix — so the flat shape is what the breadcrumb, the sitemap and
+ * `generateStaticParams` all index by.
+ */
+export interface CurriculumNode {
+  id: string;
+  parentPath: string | null;
+  kind: CurriculumKind;
+  slug: string;
+  title: string;
+  /** Syllabus code, e.g. "BCA 201". Null for courses and semesters. */
+  code: string | null;
+  path: string;
+  depth: number;
+  ordinal: number;
+  description: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  noindex: boolean;
+  updatedAt: string;
+}
+
+export interface Breadcrumb {
+  title: string;
+  path: string;
+}
+
+/** A note as it appears in a listing. */
+export interface NoteSummary {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  publishedAt: string | null;
+  readingMinutes: number | null;
+  /** The node this hangs off, e.g. `bca/semester-3/data-structure-and-algorithms`. */
+  nodePath: string;
+  nodeTitle: string;
+  updatedAt: string;
+}
+
+/**
+ * A note with its body.
+ *
+ * `bodyMarkdown` is markdown, never HTML — the reading page renders it to
+ * React elements rather than trusting it as markup.
+ */
+export interface NoteDetail extends NoteSummary {
+  bodyMarkdown: string;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  canonicalUrl: string | null;
+  noindex: boolean;
+  breadcrumbs: Breadcrumb[];
+}
