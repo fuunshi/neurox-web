@@ -174,6 +174,22 @@ export function urlFor(path: string): string {
   return `/${path}`;
 }
 
+/**
+ * The short name of a node, for title tags.
+ *
+ * "BCA (Bachelor of Computer Applications)" becomes "BCA". A title tag has
+ * roughly 60 characters before a search engine truncates it and the root
+ * template spends nine of them on "— neurox", so a full expansion plus a
+ * qualifier does not fit — and a truncated title loses exactly the words that
+ * made it worth writing.
+ *
+ * A title with no bracket is returned whole, so this is safe on nodes that
+ * never had an expansion.
+ */
+export function shortTitle(node: Pick<CurriculumNode, "title">): string {
+  return node.title.split("(")[0].trim() || node.title;
+}
+
 /** Where a note lives, given the node it hangs off. */
 export function noteUrl(note: Pick<NoteSummary, "nodePath" | "slug">): string {
   return `/${note.nodePath}/notes/${note.slug}`;

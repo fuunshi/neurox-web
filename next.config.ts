@@ -19,6 +19,26 @@ const nextConfig: NextConfig = {
         source: "/reset-password",
         headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
       },
+      /*
+       * The signed-in app tells crawlers to stay out at the HTTP layer.
+       *
+       * This is the third of three layers, and deliberately redundant:
+       * `app/robots.ts` asks, `proxy.ts` redirects, and this header applies
+       * whether or not the first was read and whether or not the second
+       * matched. Each is individually ignorable, which is the argument for
+       * having all three.
+       *
+       * The prefixes are written out rather than imported from
+       * `lib/server/routes.ts`. A config file is loaded outside the app's
+       * module graph, so the import is not reliable here — and robots.ts, which
+       * *can* import it, is the layer that stays in step automatically.
+       */
+      ...["/home", "/decks", "/sources", "/generate", "/quizzes", "/stats", "/map", "/activity", "/settings"].map(
+        (prefix) => ({
+          source: `${prefix}/:path*`,
+          headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+        }),
+      ),
     ];
   },
 };

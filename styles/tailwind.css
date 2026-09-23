@@ -4,6 +4,8 @@
 @import "./motion.css";
 @import "./base.css";
 @import "./components.css";
+/* After typography: the reading scale it uses is declared there. */
+@import "./prose.css";
 
 /*
  * A variant for the rare component that must differ per scheme — elevation and

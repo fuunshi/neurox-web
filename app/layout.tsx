@@ -1,3 +1,4 @@
+import { SITE_URL } from "@/lib/server/config";
 import type { Metadata } from "next";
 import { Newsreader, Public_Sans } from "next/font/google";
 import { themeScript } from "@/lib/theme/script";
@@ -24,12 +25,28 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
+  /*
+   * `metadataBase` is required, not optional. Any relative URL in a metadata
+   * field — a canonical, an OG image — is a **build error** without it in this
+   * version, and the failure only appears once a page sets one, which is why it
+   * belongs here rather than alongside the first page that needs it.
+   */
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "neurox — turn your study material into flashcards",
     template: "%s — neurox",
   },
   description:
     "Bring your own notes, PDFs and slides. neurox drafts flashcards from them, you review and keep the ones worth remembering.",
+  openGraph: {
+    type: "website",
+    siteName: "neurox",
+    // The content is written, examined and read in English; the audience is
+    // Nepali. `en_NP` says both, and is what a consumer should use to pick a
+    // regional variant.
+    locale: "en_NP",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 // No static `themeColor` here on purpose: it would be correct in exactly one of

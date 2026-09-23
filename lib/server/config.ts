@@ -40,3 +40,25 @@ export const SESSION_COOKIE_SECURE =
 export function apiUrl(path: string): string {
   return `${BACKEND_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
+
+/**
+ * This site's own public origin.
+ *
+ * Required, because `metadataBase` needs an absolute base and a relative URL
+ * field without one is a **build error** in this version — not a warning, and
+ * not something that shows up until a page sets an `openGraph` image or a
+ * canonical. Canonical links, the sitemap and structured data are all built
+ * from it, so it has to be the origin a crawler sees, which is not necessarily
+ * the host this app is served on behind a proxy.
+ *
+ * The default is the dev server's port, so a local build works without
+ * configuration. Production must set it: a canonical pointing at localhost is
+ * worse than no canonical at all, because it tells a search engine the real
+ * page lives somewhere that does not resolve.
+ */
+export const SITE_URL = required("SITE_URL", "http://localhost:3001");
+
+/** An absolute URL for a site path. The one place `SITE_URL` is concatenated. */
+export function siteUrl(path: string): string {
+  return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
