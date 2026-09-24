@@ -2,6 +2,7 @@ import {
   DEFAULT_THEME,
   isDarkTheme,
   isThemeId,
+  themeColor,
   THEME_COOKIE,
   type ThemeId,
 } from "./themes";
@@ -43,6 +44,11 @@ export function setTheme(theme: ThemeId) {
   const root = document.documentElement;
   root.setAttribute("data-theme", theme);
   root.style.colorScheme = isDarkTheme(theme) ? "dark" : "light";
+
+  // Browser chrome follows the scheme. A single static value in the viewport
+  // export could only ever be right for one of the three.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", themeColor(theme));
 
   // A year: the reader's choice is not session state.
   document.cookie = `${THEME_COOKIE}=${theme};path=/;max-age=31536000;samesite=lax`;
