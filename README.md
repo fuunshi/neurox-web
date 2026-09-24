@@ -104,40 +104,54 @@ pnpm test        # vitest — error handling, token expiry, throttle keying
 pnpm shots <email> <password> [deckId]   # signs in and screenshots the app to /tmp/shots
 ```
 
-## Study modes
+## Studying
 
-Two presentations of the same cards, switchable from the study screen and
-remembered in a cookie:
+Study is **scheduled**, not just displayed. Cards are graded with four buttons
+(Again / Hard / Good / Easy, or keys 1–4) and the API reschedules them.
 
-- **Swipe** — one card at a time. Drag it, or use the arrow keys, to move
-  between cards; tap it, or press space, to reveal the answer. Swiping moves
-  rather than rating: rating would be a review action, and nothing can record
-  one yet.
-- **Grid** — every card at once, each flipping on its own. For scanning a deck
-  and spotting the ones you keep getting wrong.
+- **Swipe** — one card at a time. Reveal with a tap or space, then grade. Swipe
+  right for Good, left for Again; the buttons and keys do the same. Grading is
+  refused until the answer is showing — grading something you have not checked
+  is guessing at your own memory, and the schedule would learn from noise.
+- **Grid** — every card at once, each flipping on its own. For scanning a deck.
+  **It does not grade**, and says so: a tile has no honest way to ask "how well
+  did you know that?" between two other tiles.
 
-Both render `components/study/card-surface.tsx` rather than their own markup, so
-a third mode (a list, a quiz, audio) is a component plus an entry in
-`lib/study/modes.ts` — nothing else. Modes are presenters: the session owns the
-cards and the position, and a mode reports nothing back but a position.
+`Again` returns the card **within the session** — it moves to the back of the
+queue rather than leaving it, and progress is `done / (done + remaining)`, so the
+bar does not shrink when a card is failed.
 
-**Nothing about a session is saved.** `FlashCard` has no scheduling fields and
-the API has no review endpoint, so there is nowhere to record that a card was
-seen. The screen says so rather than implying progress that would vanish on
-reload. This is the missing piece between "can show you cards" and "can teach
-you": it needs a review endpoint, an interval and a due date on the card, and a
-review log — a migration plus three endpoints.
+Both modes render `components/study/card-surface.tsx` rather than their own
+markup, so a third mode (a list, a quiz, audio) is a component plus an entry in
+`lib/study/modes.ts` — nothing else. Modes are presenters; the session owns the
+cards and the position.
+
+The scheduling itself is a pure function on the backend
+(`src/application/study/scheduling.ts`) with 22 tests, because a scheduling bug
+is invisible for weeks — cards keep coming back, or quietly stop.
+
+**Progress** (`/stats`) shows a streak, a 30-day review history, retention and
+the fortnight's forecast, all read from the review log rather than estimated.
+Its chart colours were checked with a contrast/CVD validator per theme rather
+than picked by eye — see `--chart-1`/`--chart-2` in `styles/themes.css`.
+
+**A card you keep forgetting** gets a `Suggest a rewrite` action: the API hands a
+model the card and its lapse count and returns a rewrite plus the reason for it.
+Nothing is written — accepting goes through the ordinary edit endpoint, so there
+is one path that changes a card and one place its schedule resets. Needs
+`GEMINI_API_KEY`; without one it says so rather than failing obscurely.
 
 ## Not built yet
 
-- **Persisted study progress** — see above. The seam is ready: the session
-  already knows which card is showing and when it was revealed.
-- **Automated end-to-end tests.** `scripts/shots.mjs` and
-  `scripts/shots-study.mjs` drive a real sign-in, the study gestures and a
-  pointer drag, and fail on console errors — but they are a look rather than a
-  suite. The plan is a Playwright run covering register → Mailpit → verify →
-  login → deck → upload → generate → review.
+- **Automated end-to-end tests.** `scripts/shots*.mjs` drive a real sign-in, the
+  study gestures, a pointer drag and the stats page, and fail on console errors —
+  but they are a look rather than a suite. The plan is a Playwright run covering
+  register → Mailpit → verify → login → deck → upload → generate → review.
 - **Email verification and MFA are reachable but not exercised by a test.** The
   screens handle the states; nothing asserts them.
 - **Only the first 50 cards** load into review or study. `Load more` covers the
   review screen; study does not page yet.
+- **Undo a review.** A mis-click on `Again` currently cannot be taken back
+  without editing the schedule by hand.
+- **Import.** Decks can be studied but not brought in — no CSV or Anki import,
+  and no export either.
