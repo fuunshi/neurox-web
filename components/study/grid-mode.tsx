@@ -20,8 +20,11 @@ export interface GridModeProps {
  * all at once — revealing all of them would turn the grid into a wall of text
  * with nothing left to recall.
  *
- * This mode ignores the session's position and flip state on purpose: there is
- * no "current" card here.
+ * **Browsing does not grade.** A tile has no honest way to ask "how well did you
+ * know that?" in the space between two other tiles, and a grid where every click
+ * could silently record a review is a grid you stop clicking. Saying so plainly
+ * matters more than it sounds: the alternative is a reader studying here for an
+ * hour and finding nothing was recorded.
  */
 export function GridMode({ cards }: GridModeProps) {
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set());
@@ -39,7 +42,8 @@ export function GridMode({ cards }: GridModeProps) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-subtle">
-          Tap a card to check its answer.
+          Tap a card to check its answer. Checking a card here does not grade it
+          — switch to Swipe to record a review.
         </p>
 
         <div className="flex flex-wrap items-center gap-2">

@@ -2,8 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import type { FlashCard } from "@/lib/api-types";
+import { FormBanner } from "@/components/auth/form-banner";
+import { Button, buttonStyles } from "@/components/ui/button";
+import { apiFetch } from "@/lib/api/client";
+import type {
+  DeckStats,
+  FlashCard,
+  ReviewRating,
+  ReviewResult,
+} from "@/lib/api-types";
+import { ApiError } from "@/lib/errors";
+import { formatCount, formatInterval } from "@/lib/format";
 import {
   DEFAULT_STUDY_MODE,
   STUDY_MODE_COOKIE,
@@ -15,93 +24,162 @@ import { ModeSwitcher } from "./mode-switcher";
 import { SwipeMode } from "./swipe-mode";
 
 /**
- * Owns everything a study session knows: which cards, in what order, and — for
- * modes that show one at a time — where you are.
+ * A study session: the queue, the grading, and where you are.
  *
- * Modes are presenters. They receive cards and report nothing back except a
- * position, which is what keeps adding one cheap.
+ * The queue is a plain array where the head is the current card. Grading pops
+ * it; `AGAIN` moves it to the back so it returns before the session ends, which
+ * is what "forgotten" should mean — the reader meets it again while the context
+ * is still fresh, not tomorrow.
  *
- * **Nothing here is saved.** The API has no review endpoint and `FlashCard` has
- * no scheduling fields, so there is nowhere to record that a card was seen. The
- * session is honest about that rather than implying progress that would be lost
- * on reload.
+ * Progress is `done / (done + remaining)`. A failed card moves within the queue
+ * rather than leaving it, so the total does not grow when a card is failed and
+ * the reader is not punished with a shrinking bar.
  */
 export function StudySession({
   deckId,
   deckTitle,
-  cards: initialCards,
+  cards,
+  stats,
   initialMode = DEFAULT_STUDY_MODE,
 }: {
   deckId: string;
   deckTitle: string;
   cards: FlashCard[];
+  stats: DeckStats;
   initialMode?: StudyModeId;
 }) {
   const [mode, setMode] = useState<StudyModeId>(initialMode);
-  const [cards, setCards] = useState(initialCards);
-  const [index, setIndex] = useState(0);
-  const [flipped, setFlipped] = useState(false);
+  const [queue, setQueue] = useState(cards);
+  const [revealed, setRevealed] = useState(false);
+  const [done, setDone] = useState(0);
+  const [againCount, setAgainCount] = useState(0);
+  const [last, setLast] = useState<ReviewResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
 
+  const current = queue[0];
+  const finished = queue.length === 0;
+  const total = done + queue.length;
   const sequential = studyMode(mode).sequential;
 
   const chooseMode = useCallback((next: StudyModeId) => {
     setMode(next);
-    // Remembered like the colour scheme: a preference, not session state.
     document.cookie = `${STUDY_MODE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
   }, []);
 
-  const restart = useCallback(() => {
-    setIndex(0);
-    setFlipped(false);
+  /** Records a grade and advances the queue. */
+  const grade = useCallback(
+    async (rating: ReviewRating) => {
+      if (!current || busy) return;
+
+      setBusy(true);
+      setError(null);
+
+      try {
+        const result = await apiFetch<ReviewResult>(
+          `cards/${current.id}/review`,
+          { method: "POST", body: { rating } },
+        );
+
+        setLast(result);
+        setRevealed(false);
+
+        if (rating === "AGAIN") {
+          // To the back, not out: the card comes round again this session.
+          setQueue((q) => [...q.slice(1), q[0]]);
+          setAgainCount((n) => n + 1);
+        } else {
+          setQueue((q) => q.slice(1));
+          setDone((n) => n + 1);
+        }
+      } catch (thrown) {
+        setError(
+          thrown instanceof ApiError
+            ? thrown
+            : new ApiError({
+                kind: "unknown",
+                messages: ["That review could not be saved."],
+              }),
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [current, busy],
+  );
+
+  /** Pushes the current card back without grading it — for a card you want to
+   *  come back to rather than judge now. */
+  const skip = useCallback(() => {
+    setQueue((q) => (q.length > 1 ? [...q.slice(1), q[0]] : q));
+    setRevealed(false);
   }, []);
 
   const shuffle = useCallback(() => {
-    setCards((current) => {
-      const next = [...current];
-      // Fisher-Yates. Done here rather than during render: an order produced in
-      // a render pass would change on every re-render.
+    setQueue((q) => {
+      const next = [...q];
+      // Fisher-Yates, in a handler rather than during render: an order produced
+      // in a render pass would change on every re-render.
       for (let i = next.length - 1; i > 0; i -= 1) {
         const j = Math.floor(Math.random() * (i + 1));
         [next[i], next[j]] = [next[j], next[i]];
       }
       return next;
     });
-    restart();
-  }, [restart]);
+    setRevealed(false);
+  }, []);
 
   /**
-   * Arrow keys and space, bound at the window so they work without hunting for
-   * a focus target — which is the difference between a keyboard-usable card and
-   * one that merely has buttons on it.
+   * Space reveals; 1–4 grade once the answer is showing.
+   *
+   * Bound at the window so the keys work without hunting for a focus target.
+   * Number keys are why the grades are labelled with them — grading a card
+   * should not need the mouse.
    */
   useEffect(() => {
     if (!sequential) return;
 
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      // Leave Space and Enter alone when something focusable has focus, or the
-      // button's own activation and this handler would both fire.
       const onControl = target?.closest(
         "button, a, input, select, textarea, [contenteditable]",
       );
 
-      if (event.key === "ArrowRight") {
+      if (event.key === " " && !onControl) {
         event.preventDefault();
-        setIndex((current) => Math.min(current + 1, cards.length - 1));
-        setFlipped(false);
-      } else if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        setIndex((current) => Math.max(current - 1, 0));
-        setFlipped(false);
-      } else if ((event.key === " " || event.key === "Enter") && !onControl) {
-        event.preventDefault();
-        setFlipped((current) => !current);
+        setRevealed((r) => !r);
+        return;
+      }
+
+      if (revealed && !busy) {
+        const grade_for: Record<string, ReviewRating> = {
+          "1": "AGAIN",
+          "2": "HARD",
+          "3": "GOOD",
+          "4": "EASY",
+        };
+        const rating = grade_for[event.key];
+        if (rating) {
+          event.preventDefault();
+          void grade(rating);
+        }
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [sequential, cards.length]);
+  }, [sequential, revealed, busy, grade]);
+
+  if (finished) {
+    return (
+      <SessionSummary
+        deckId={deckId}
+        deckTitle={deckTitle}
+        done={done}
+        againCount={againCount}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -115,7 +193,8 @@ export function StudySession({
             >
               {deckTitle}
             </Link>{" "}
-            · {cards.length} active card{cards.length === 1 ? "" : "s"}
+            · {formatCount(cards.length, "card")} to get through
+            {stats.learning > 0 ? `, ${stats.learning} relearning` : ""}
           </p>
         </div>
 
@@ -124,35 +203,88 @@ export function StudySession({
           <Button variant="secondary" size="sm" onClick={shuffle}>
             Shuffle
           </Button>
-          {sequential ? (
-            <Button variant="ghost" size="sm" onClick={restart}>
-              Start over
-            </Button>
-          ) : null}
         </div>
       </div>
 
-      {/* Branched explicitly rather than through an id → component map: the two
-          take different props, and a converter would hide that. */}
+      {/* What the last grade did, so the schedule is legible rather than magic:
+          "Good" quietly meaning "see you in three days" teaches nothing. */}
+      {last ? (
+        <p
+          aria-live="polite"
+          className="rounded-md border border-line bg-surface-2 px-3.5 py-2 text-sm text-ink-muted"
+        >
+          {last.rating === "AGAIN"
+            ? "Coming back before the end of this session."
+            : `Next review ${formatInterval(last.scheduling.intervalDays)}.`}
+        </p>
+      ) : null}
+
+      <FormBanner error={error} />
+
       {mode === "swipe" ? (
         <SwipeMode
-          cards={cards}
-          index={index}
-          onIndexChange={setIndex}
-          flipped={flipped}
-          onFlippedChange={setFlipped}
+          card={current}
+          revealed={revealed}
+          onReveal={() => setRevealed((r) => !r)}
+          onGrade={grade}
+          onSkip={skip}
+          busy={busy}
+          done={done}
+          total={total}
         />
       ) : (
-        <GridMode cards={cards} />
+        <GridMode cards={queue} />
       )}
+    </div>
+  );
+}
 
-      {/* Stated plainly rather than left to be discovered on reload. */}
-      <p className="rounded-md border border-line bg-surface-2 px-3.5 py-3 text-sm text-ink-muted">
-        This session is not saved. neurox can show you the cards but cannot yet
-        remember which ones you have seen — that needs review scheduling, which
-        the API does not have. Keep a deck small for now, or use the grid to see
-        everything at once.
-      </p>
+function SessionSummary({
+  deckId,
+  deckTitle,
+  done,
+  againCount,
+}: {
+  deckId: string;
+  deckTitle: string;
+  done: number;
+  againCount: number;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-2xl">Session finished</h1>
+
+      <div className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-6">
+        <p className="font-display text-xl">
+          {done === 0
+            ? "Nothing was graded"
+            : `${formatCount(done, "card")} brought forward`}
+        </p>
+
+        <p className="max-w-prose text-ink-muted">
+          {againCount > 0
+            ? `${formatCount(againCount, "card")} came back round after you forgot ${
+                againCount === 1 ? "it" : "them"
+              }. Those are scheduled sooner than the rest — that is the schedule working, not a failure.`
+            : "Every card moved out to a longer interval. They will come back when they are due."}
+        </p>
+
+        <p className="text-sm text-ink-subtle">
+          Studying {deckTitle}.
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+          <Link href={`/decks/${deckId}`} className={buttonStyles()}>
+            Back to the deck
+          </Link>
+          <Link
+            href="/decks"
+            className={buttonStyles({ variant: "secondary" })}
+          >
+            All decks
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
