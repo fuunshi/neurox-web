@@ -3,11 +3,13 @@ import { buttonStyles } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { listDecks } from "@/lib/server/queries";
+import { NewDeck } from "./new-deck";
 
 export const metadata = { title: "Decks" };
 
 export default async function DecksPage() {
   const { data: decks } = await listDecks();
+  const draftsAwaitingReview = decks.filter((deck) => deck.cardCount > 0).length;
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
@@ -18,9 +20,15 @@ export default async function DecksPage() {
             Each deck holds the cards for one subject.
           </p>
         </div>
-        <Link href="/generate" className={buttonStyles()}>
-          Generate cards
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/generate"
+            className={buttonStyles({ variant: "secondary" })}
+          >
+            Draft from a source
+          </Link>
+          <NewDeck />
+        </div>
       </div>
 
       {decks.length === 0 ? (
@@ -34,30 +42,39 @@ export default async function DecksPage() {
           }
         />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {decks.map((deck) => (
-            <li key={deck.id}>
-              <Link
-                href={`/decks/${deck.id}`}
-                className="flex h-full flex-col gap-2 rounded-lg border border-line bg-surface p-4 transition-colors hover:border-line-strong"
-              >
-                <span className="font-display text-lg">{deck.title}</span>
-                {deck.description ? (
-                  <span className="line-clamp-2 text-sm text-ink-muted">
-                    {deck.description}
+        <>
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {decks.map((deck) => (
+              <li key={deck.id}>
+                <Link
+                  href={`/decks/${deck.id}`}
+                  className="flex h-full flex-col gap-2 rounded-lg border border-line bg-surface p-4 transition-colors hover:border-line-strong"
+                >
+                  <span className="font-display text-lg">{deck.title}</span>
+                  {deck.description ? (
+                    <span className="line-clamp-2 text-sm text-ink-muted">
+                      {deck.description}
+                    </span>
+                  ) : null}
+                  <span className="mt-auto pt-2">
+                    <Chip tone={deck.cardCount === 0 ? "due" : "neutral"}>
+                      {deck.cardCount === 0
+                        ? "No cards yet"
+                        : `${deck.cardCount} card${deck.cardCount === 1 ? "" : "s"}`}
+                    </Chip>
                   </span>
-                ) : null}
-                <span className="mt-auto pt-2">
-                  <Chip tone={deck.cardCount === 0 ? "due" : "neutral"}>
-                    {deck.cardCount === 0
-                      ? "No cards"
-                      : `${deck.cardCount} card${deck.cardCount === 1 ? "" : "s"}`}
-                  </Chip>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          {draftsAwaitingReview > 0 ? (
+            <p className="text-sm text-ink-subtle">
+              Open a deck to review its drafts — generated cards stay drafts
+              until you keep them.
+            </p>
+          ) : null}
+        </>
       )}
     </div>
   );

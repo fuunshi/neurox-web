@@ -215,6 +215,84 @@ export interface TextChunk {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Generation                                                                  */
+/* -------------------------------------------------------------------------- */
+
+export type GenerationJobStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "CANCELLED";
+
+/** A job is finished once its status is one of these; polling stops. */
+export const TERMINAL_JOB_STATUSES: readonly GenerationJobStatus[] = [
+  "SUCCEEDED",
+  "FAILED",
+  "CANCELLED",
+];
+
+export interface GenerationJob {
+  id: string;
+  deckId: string;
+  sourceId: string;
+  status: GenerationJobStatus;
+  /** Which generator ran — `heuristic` or `gemini`. */
+  provider: string;
+  model: string | null;
+  /** The requested cap, or null when the default applied. */
+  cardsRequested: number | null;
+  /** Only meaningful once SUCCEEDED. Zero is a valid result, not a failure. */
+  cardsCreated: number;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Activity                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export interface Activity {
+  id: string;
+  type: string;
+  actor: {
+    id: string;
+    email?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+  } | null;
+  entityType: string;
+  entityId: string;
+  contextType: string | null;
+  contextId: string | null;
+  data: Record<string, unknown>;
+  createdAt: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Profile                                                                     */
+/* -------------------------------------------------------------------------- */
+
+export interface UserProfile {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  displayName: string | null;
+  avatar: string | null;
+  bio: string | null;
+  phoneNumber: string | null;
+  country: string | null;
+  timezone: string | null;
+  language: string | null;
+  /** An object on read, but a JSON *string* on write — see UpdateProfileRequest. */
+  socialLinks: Record<string, unknown> | null;
+  preferences: Record<string, unknown> | null;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Requests — mirror the DTOs exactly                                          */
 /* -------------------------------------------------------------------------- */
 
@@ -260,4 +338,41 @@ export interface CreateTextSourceRequest {
   title: string;
   text: string;
   type?: SourceType;
+}
+
+export interface CreateGenerationJobRequest {
+  sourceId: string;
+  maxCards?: number;
+}
+
+export interface UpdateCardRequest {
+  front?: string;
+  back?: string;
+  hint?: string;
+  status?: CardStatus;
+}
+
+export interface UpdatePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  newConfirmationPassword: string;
+}
+
+/**
+ * `firstName` is required even on update — the DTO has no `@IsOptional` on it —
+ * and `socialLinks` / `preferences` are validated with `@IsJSON`, so they must
+ * be sent as **JSON strings**, not objects, even though `GET /user/me/profile`
+ * returns them as objects. The mismatch is the backend's, not a mistake here.
+ */
+export interface UpdateProfileRequest {
+  firstName: string;
+  lastName?: string;
+  displayName?: string;
+  bio?: string;
+  phoneNumber?: string;
+  country?: string;
+  timezone?: string;
+  language?: string;
+  socialLinks?: string;
+  preferences?: string;
 }
