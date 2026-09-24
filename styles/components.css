@@ -1,0 +1,30 @@
+/*
+ * Component styles that must be driven by CSS rather than by React state.
+ *
+ * These rules are intentionally NOT inside `@layer`. Unlayered rules win the
+ * cascade against Tailwind's `@layer utilities`, which is exactly what is
+ * needed here: the active scheme option has to follow `<html data-theme>`,
+ * which the pre-paint script has already set, so it is correct in the first
+ * painted frame — before React has hydrated and before any state exists.
+ *
+ * Anything that can be expressed as a utility with a token should stay in the
+ * component. Reach for this file only when appearance must be a function of the
+ * document's theme attribute.
+ */
+
+/* Theme switcher: the labelled option that matches the active scheme. */
+[data-scheme-option] {
+  color: var(--ink-muted);
+}
+
+[data-scheme-option]:hover {
+  color: var(--ink);
+}
+
+[data-theme="daylight"] [data-scheme-option="daylight"],
+[data-theme="nightlab"] [data-scheme-option="nightlab"],
+[data-theme="paper"] [data-scheme-option="paper"] {
+  background-color: var(--accent-soft);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
