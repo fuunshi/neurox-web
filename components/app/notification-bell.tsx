@@ -30,7 +30,7 @@ const TONE: Record<NotificationTone, ChipTone> = {
  * information and starts being decoration.
  */
 export function NotificationBell() {
-  const { items, unreadCount, loading, markRead, markAllRead } =
+  const { items, unreadCount, loading, error, markRead, markAllRead } =
     useNotifications();
   const [open, setOpen] = useState(false);
 
@@ -108,6 +108,20 @@ export function NotificationBell() {
             {loading ? (
               <p className="px-2.5 py-6 text-center text-sm text-ink-subtle">
                 Loading…
+              </p>
+            ) : error ? (
+              /*
+               * Quiet, but not silent. A failed load used to fall through to
+               * the empty state below, so the bell answered "Nothing yet" — a
+               * claim about the reader's notifications where the truth was a
+               * claim about the request. That is how a proxy allow-list
+               * missing one root went on 404ing on every page load without
+               * anyone noticing. Still not a banner: the panel is a glance,
+               * and the hook's whole contract is that the bell is not why
+               * anyone opened the page.
+               */
+              <p className="px-2.5 py-6 text-center text-sm text-ink-subtle">
+                Could not load notifications.
               </p>
             ) : items.length === 0 ? (
               <p className="px-2.5 py-6 text-center text-sm text-ink-subtle">

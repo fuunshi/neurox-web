@@ -44,6 +44,29 @@
   --text-5xl--line-height: 1.08;
   --text-6xl: 3.75rem;
   --text-6xl--line-height: 1.04;
+
+  /*
+   * The reading scale, deliberately separate from the interface scale above.
+   *
+   * `--text-base` is 0.9375rem/1.6, which is right for labels, controls and
+   * table rows, and wrong for a page of prose: long-form wants a slightly
+   * larger face and noticeably more leading. Raising `--text-base` to get that
+   * would reflow the entire signed-in app to fix a problem only the reading
+   * pages have, so the two scales coexist instead.
+   */
+  --text-prose: 1.0625rem;
+  --text-prose--line-height: 1.7;
+  --text-prose-lead: 1.1875rem;
+  --text-prose-lead--line-height: 1.6;
+
+  /*
+   * Measure for body copy.
+   *
+   * Not `--container-prose`: that would override Tailwind's built-in
+   * `max-w-prose` and silently change the width of the ~28 places already
+   * using it. This is a plain variable the reading layer opts into.
+   */
+  --measure-prose: 68ch;
 }
 
 /*
