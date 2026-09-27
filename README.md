@@ -4,7 +4,7 @@ The front end for **neurox**: bring your own study material, review the cards
 drafted from it, keep the ones worth remembering.
 
 Next.js 16 (App Router) on port **3001**, talking to the NestJS API in
-`../flash-cards-backend` on port **3232**.
+`../neurox-backend` on port **3232**.
 
 ## Running it
 
@@ -13,7 +13,7 @@ Both processes are needed for the full loop: the API serves requests, and the
 
 ```bash
 # backend (two terminals)
-cd ../flash-cards-backend
+cd ../neurox-backend
 pnpm run migrate:up         # first time, or after schema changes
 pnpm run start:dev          # API on :3232
 pnpm run start:worker:dev   # worker — required for email and generation

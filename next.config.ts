@@ -1,6 +1,20 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /*
+   * `standalone` is for the container build.
+   *
+   * Without it `next start` needs the entire `node_modules` tree at runtime —
+   * several hundred megabytes of compilers and type definitions that a running
+   * server never touches — because it resolves modules per request. Standalone
+   * traces what the server actually imports and emits that beside a minimal
+   * `server.js`, which is the difference between an image worth shipping and
+   * one that is mostly build tooling.
+   *
+   * It is inert on Vercel, which bundles the app its own way and ignores this.
+   */
+  output: "standalone",
+
   async headers() {
     return [
       {
